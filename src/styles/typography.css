@@ -1,0 +1,52 @@
+html {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(249, 115, 22, 0.08), transparent 30%),
+    var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body), sans-serif;
+  font-size: var(--font-size-md);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(2.8rem, 5vw, 5.5rem);
+}
+
+h2 {
+  font-size: clamp(2rem, 3vw, 3.4rem);
+}
+
+h3 {
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+}
+
+p {
+  color: var(--color-muted);
+}
+
+main {
+  display: block;
+}
+
+::selection {
+  background: rgba(249, 115, 22, 0.2);
+}
