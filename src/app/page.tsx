@@ -1,29 +1,7 @@
 import { Button } from "@/components/Button";
+import { getCategories } from "@/services/categories.service";
 
 import styles from "./page.module.css";
-
-const categoryBlocks = [
-  {
-    title: "Спецодяг",
-    description:
-      "Робочий одяг для складів, виробництва, сервісних служб і щоденної зміни.",
-  },
-  {
-    title: "Спецвзуття",
-    description:
-      "Взуття з акцентом на захист, зчеплення, комфорт протягом зміни та довговічність.",
-  },
-  {
-    title: "Засоби захисту",
-    description:
-      "Каски, рукавички, окуляри, респіратори та інші категорії для безпечної роботи.",
-  },
-  {
-    title: "Аксесуари",
-    description:
-      "Практичні доповнення для сезонних робіт, зберігання та щоденного використання.",
-  },
-];
 
 const benefits = [
   "Роздрібні та оптові сценарії в одному магазині",
@@ -32,7 +10,19 @@ const benefits = [
   "Індустріальний стиль із чистою подачею товарів",
 ];
 
-export default function HomePage() {
+const categoryFallbackDescriptions: Record<string, string> = {
+  specodyag:
+    "Робочий одяг для складів, виробництва, сервісних служб і щоденної зміни.",
+  specvzuttya:
+    "Взуття з акцентом на захист, зчеплення, комфорт протягом зміни та довговічність.",
+  ziz: "Каски, рукавички, окуляри, респіратори та інші категорії для безпечної роботи.",
+  accessories:
+    "Практичні доповнення для сезонних робіт, зберігання та щоденного використання.",
+};
+
+export default async function HomePage() {
+  const categories = await getCategories();
+
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -87,13 +77,17 @@ export default function HomePage() {
             </p>
           </div>
           <div className={styles.categoryGrid}>
-            {categoryBlocks.map((category, index) => (
-              <article key={category.title} className={styles.categoryCard}>
+            {categories.map((category, index) => (
+              <article key={category.id} className={styles.categoryCard}>
                 <span className={styles.categoryIndex}>
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3>{category.title}</h3>
-                <p>{category.description}</p>
+                <h3>{category.name}</h3>
+                <p>
+                  {category.description ??
+                    categoryFallbackDescriptions[category.slug] ??
+                    "Категорія товарів SpecWear."}
+                </p>
               </article>
             ))}
           </div>

@@ -1,0 +1,1 @@
+export { WishlistClient } from "./WishlistClient";

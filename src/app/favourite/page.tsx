@@ -1,13 +1,19 @@
-import styles from "@/app/section-page.module.css";
+import { WishlistClient } from "@/components/Wishlist";
+import styles from "@/components/Wishlist/Wishlist.module.css";
 
 export default function FavouritePage() {
   return (
     <main className={styles.page}>
-      <h1>Обране</h1>
-      <p>
-        Після додавання товарів і сценаріїв акаунта тут з’являться збережені
-        позиції та списки для закупівель.
-      </p>
+      <section className={styles.hero}>
+        <span className={styles.eyebrow}>Список обраного</span>
+        <h1>Обране</h1>
+        <p>
+          Зберігайте позиції для повторного перегляду, швидкого повернення до
+          товару та подальшого додавання в кошик.
+        </p>
+      </section>
+
+      <WishlistClient />
     </main>
   );
 }

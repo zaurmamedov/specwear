@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { HeaderActions } from "./HeaderActions";
 import styles from "./Header.module.css";
 
 const primaryLinks = [
@@ -79,51 +80,12 @@ export function Header() {
           ))}
         </nav>
 
-        <nav aria-label="Службова навігація" className={styles.utilityNav}>
-          {utilityLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`${styles.utilityLink} ${isActiveLink(link.href) ? styles.utilityLinkActive : ""}`}
-              aria-label={link.label}
-              aria-current={isActiveLink(link.href) ? "page" : undefined}
-            >
-              {link.href === "/favourite" ? (
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  className={styles.utilityIcon}
-                >
-                  <path
-                    d="M12 20.25 4.9 13.45a4.7 4.7 0 0 1 0-6.78 4.87 4.87 0 0 1 6.87 0L12 6.9l.23-.23a4.87 4.87 0 0 1 6.87 0 4.7 4.7 0 0 1 0 6.78L12 20.25Z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.8"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  className={styles.utilityIcon}
-                >
-                  <path
-                    d="M3 5h2l2.2 9.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.75L20 8H7"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.8"
-                  />
-                  <circle cx="10" cy="19" r="1.4" fill="currentColor" />
-                  <circle cx="17" cy="19" r="1.4" fill="currentColor" />
-                </svg>
-              )}
-            </Link>
-          ))}
-        </nav>
+        <HeaderActions
+          wishlistHref="/favourite"
+          cartHref="/cart"
+          isWishlistActive={isActiveLink("/favourite")}
+          isCartActive={isActiveLink("/cart")}
+        />
 
         <button
           type="button"

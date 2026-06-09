@@ -1,14 +1,14 @@
-import { supabase } from '@/lib/supabase/client';
-import { Category } from '@/types/category';
+import { supabase } from "@/lib/supabase/client";
+import type { Category } from "@/types/category";
 
 export async function getCategories(): Promise<Category[]> {
   const { data, error } = await supabase
-    .from('categories')
-    .select('*')
-    .order('sort_order');
+    .from("categories")
+    .select("*")
+    .order("sort_order", { ascending: true });
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Failed to fetch categories: ${error.message}`);
   }
 
   return data as Category[];
