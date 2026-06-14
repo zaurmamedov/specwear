@@ -14,6 +14,8 @@ type CartStore = {
   addItem: (item: AddCartItemInput) => void;
   removeItem: (productId: string, variantId?: string | null) => void;
   setQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
+  hasItem: (productId: string, variantId?: string | null) => boolean;
+  toggleItem: (item: AddCartItemInput) => void;
   clearCart: () => void;
   getItemCount: () => number;
   getSubtotal: () => number;
@@ -76,6 +78,16 @@ export const useCartStore = create<CartStore>()(
             ),
           };
         }),
+      hasItem: (productId, variantId) =>
+        get().items.some((item) => isSameCartItem(item, productId, variantId)),
+      toggleItem: (item) => {
+        if (get().hasItem(item.productId, item.variantId)) {
+          get().removeItem(item.productId, item.variantId);
+          return;
+        }
+
+        get().addItem(item);
+      },
       clearCart: () => set({ items: [] }),
       getItemCount: () =>
         get().items.reduce((total, item) => total + item.quantity, 0),

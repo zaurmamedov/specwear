@@ -244,7 +244,7 @@
 .sizeButton:disabled,
 .colorButton:disabled,
 .quantityButton:disabled,
-.wishlistButton:disabled {
+.actionButton:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -293,11 +293,10 @@
 }
 
 .controlsRow {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-sm);
   align-items: center;
-  justify-content: space-between;
 }
 
 .quantityControl {
@@ -322,7 +321,13 @@
   text-align: center;
 }
 
-.wishlistButton {
+.actionButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.actionButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -338,34 +343,39 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
-.wishlistButton:hover {
+.actionButton:hover {
   border-color: rgba(249, 115, 22, 0.36);
   color: var(--color-accent);
   background: rgba(249, 115, 22, 0.08);
+  transform: translateY(-1px);
 }
 
+.actionButton:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.35);
+  outline-offset: 3px;
+}
+
+.cartButtonActive,
 .wishlistButtonActive {
   border-color: rgba(249, 115, 22, 0.45);
   color: var(--color-accent);
   background: rgba(249, 115, 22, 0.12);
 }
 
-.wishlistIcon {
+.cartButtonActive {
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.18), rgba(249, 115, 22, 0.08));
+}
+
+.actionIcon {
   width: 1.2rem;
   height: 1.2rem;
-}
-
-.cartButton {
-  width: 100%;
-}
-
-.cartButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-  box-shadow: none;
-  transform: none;
 }
 
 .unavailableNotice {
@@ -433,6 +443,10 @@
     min-height: 0;
     aspect-ratio: 4 / 5;
   }
+
+  .controlsRow {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 767px) {
@@ -443,6 +457,10 @@
   .quantityControl {
     flex: 1 1 auto;
     justify-content: space-between;
+  }
+
+  .actionButtons {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -457,11 +475,6 @@
   }
 
   .controlsRow {
-    flex-direction: column;
     align-items: stretch;
-  }
-
-  .wishlistButton {
-    width: 100%;
   }
 }

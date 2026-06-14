@@ -30,13 +30,50 @@ function getPrimaryImageAlt(product: ProductCardData) {
 }
 
 function getSku(product: ProductCardData) {
-  const sku = product.product_variants[0]?.sku?.trim();
+  const sku = getPrimaryVariant(product)?.sku?.trim();
 
   return sku ? sku : null;
 }
 
+function getActiveVariants(product: ProductCardData) {
+  return product.product_variants.filter((variant) => variant.is_active);
+}
+
+function hasSinglePurchasableVariant(product: ProductCardData) {
+  const activeVariants = getActiveVariants(product);
+
+  return (
+    activeVariants.length === 1 &&
+    activeVariants[0].retail_price !== null &&
+    activeVariants[0].stock_quantity > 0
+  );
+}
+
+function hasMultipleVariants(product: ProductCardData) {
+  return getActiveVariants(product).length > 1;
+}
+
+function canDirectAddToCart(product: ProductCardData) {
+  return hasSinglePurchasableVariant(product);
+}
+
+function hasPurchasableVariant(product: ProductCardData) {
+  return getActiveVariants(product).some(
+    (variant) => variant.retail_price !== null && variant.stock_quantity > 0
+  );
+}
+
 function getPrimaryVariant(product: ProductCardData) {
-  return product.product_variants.find((variant) => variant.is_active) ?? null;
+  return (
+    product.product_variants.find(
+      (variant) =>
+        variant.is_active &&
+        variant.retail_price !== null &&
+        variant.stock_quantity > 0
+    ) ??
+    product.product_variants.find((variant) => variant.is_active) ??
+    null
+  );
 }
 
 export function ProductCard({ product }: ProductCardProps) {
@@ -47,10 +84,11 @@ export function ProductCard({ product }: ProductCardProps) {
   const retailPrice = primaryVariant?.retail_price ?? null;
   const oldPrice = primaryVariant?.old_price ?? null;
   const sku = getSku(product);
-  const canAddToCart =
-    primaryVariant !== null &&
-    primaryVariant.retail_price !== null &&
-    primaryVariant.stock_quantity > 0;
+  const activeVariants = getActiveVariants(product);
+  const isSinglePurchasableVariant = hasSinglePurchasableVariant(product);
+  const productHasMultipleVariants = hasMultipleVariants(product);
+  const canAddToCart = canDirectAddToCart(product);
+  const productHasPurchasableVariant = hasPurchasableVariant(product);
 
   return (
     <article className={styles.card}>
@@ -76,8 +114,24 @@ export function ProductCard({ product }: ProductCardProps) {
 
       <div className={styles.body}>
         <div className={styles.meta}>
-          <span>{product.category?.name ?? "Категорія"}</span>
-          {product.brand?.name ? <span>{product.brand.name}</span> : null}
+          {product.category ? (
+            <Link
+              href={`/catalog?category=${product.category.slug}`}
+              className={styles.metaLink}
+            >
+              {product.category.name}
+            </Link>
+          ) : (
+            <span>Категорія</span>
+          )}
+          {product.brand ? (
+            <Link
+              href={`/catalog?brand=${product.brand.slug}`}
+              className={styles.metaLink}
+            >
+              {product.brand.name}
+            </Link>
+          ) : null}
         </div>
 
         <div className={styles.content}>
@@ -108,12 +162,12 @@ export function ProductCard({ product }: ProductCardProps) {
             {sku ? <span className={styles.sku}>{sku}</span> : null}
             <span
               className={
-                canAddToCart
+                productHasPurchasableVariant
                   ? styles.inStock
                   : styles.outOfStock
               }
             >
-              {canAddToCart ? "В наявності" : "Немає в наявності"}
+              {productHasPurchasableVariant ? "В наявності" : "Немає в наявності"}
             </span>
           </div>
 
@@ -129,6 +183,10 @@ export function ProductCard({ product }: ProductCardProps) {
             categoryName={product.category?.name ?? null}
             brandName={product.brand?.name ?? null}
             canAddToCart={canAddToCart}
+            hasSinglePurchasableVariant={isSinglePurchasableVariant}
+            hasMultipleVariants={productHasMultipleVariants}
+            hasActiveVariants={activeVariants.length > 0}
+            hasPurchasableVariant={productHasPurchasableVariant}
           />
         </div>
       </div>

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/Button";
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
 import type { ProductVariant } from "@/types/product";
@@ -43,7 +42,9 @@ export function ProductDetailsActions({
   brandName,
   variants,
 }: ProductDetailsActionsProps) {
-  const addItem = useCartStore((state) => state.addItem);
+  const cartItems = useCartStore((state) => state.items);
+  const toggleCartItem = useCartStore((state) => state.toggleItem);
+  const setCartQuantity = useCartStore((state) => state.setQuantity);
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const wishlistItems = useWishlistStore((state) => state.items);
 
@@ -214,19 +215,18 @@ export function ProductDetailsActions({
         : canAddToCart
           ? "В наявності"
           : "Немає в наявності";
-  const addToCartLabel = isCatalogUnavailable
-    ? "Товар тимчасово недоступний"
-    : needsFullSelection
-      ? "Оберіть розмір і колір"
-      : canAddToCart
-        ? "До кошика"
-        : "Немає в наявності";
-
   const isWishlisted = wishlistItems.some(
     (item) =>
       item.productId === productId &&
       (item.variantId ?? null) === (selectedVariant?.id ?? null)
   );
+  const cartItem =
+    cartItems.find(
+      (item) =>
+        item.productId === productId &&
+        (item.variantId ?? null) === (selectedVariant?.id ?? null)
+    ) ?? null;
+  const isInCart = cartItem !== null;
 
   const selectedSku = selectedVariant?.sku?.trim() || null;
 
@@ -244,6 +244,7 @@ export function ProductDetailsActions({
     categoryName,
     brandName,
   };
+  const effectiveQuantity = cartItem?.quantity ?? currentQuantity;
 
   return (
     <section className={styles.actionsPanel}>
@@ -342,65 +343,101 @@ export function ProductDetailsActions({
             type="button"
             className={styles.quantityButton}
             aria-label="Зменшити кількість"
-            onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-            disabled={!canAddToCart || currentQuantity <= 1}
+            onClick={() => {
+              if (isInCart && selectedVariant) {
+                setCartQuantity(
+                  productId,
+                  Math.max(1, effectiveQuantity - 1),
+                  selectedVariant.id
+                );
+                return;
+              }
+
+              setQuantity((current) => Math.max(1, current - 1));
+            }}
+            disabled={!canAddToCart || effectiveQuantity <= 1}
           >
             -
           </button>
-          <span className={styles.quantityValue}>{currentQuantity}</span>
+          <span className={styles.quantityValue}>{effectiveQuantity}</span>
           <button
             type="button"
             className={styles.quantityButton}
             aria-label="Збільшити кількість"
-            onClick={() =>
+            onClick={() => {
+              if (isInCart && selectedVariant) {
+                setCartQuantity(
+                  productId,
+                  Math.min(Math.max(maxQuantity, 1), effectiveQuantity + 1),
+                  selectedVariant.id
+                );
+                return;
+              }
+
               setQuantity((current) =>
                 Math.min(Math.max(maxQuantity, 1), current + 1)
-              )
-            }
-            disabled={!canAddToCart || currentQuantity >= maxQuantity}
+              );
+            }}
+            disabled={!canAddToCart || effectiveQuantity >= maxQuantity}
           >
             +
           </button>
         </div>
 
-        <button
-          type="button"
-          className={`${styles.wishlistButton} ${isWishlisted ? styles.wishlistButtonActive : ""}`}
-          aria-label={isWishlisted ? "Прибрати з обраного" : "Додати в обране"}
-          aria-pressed={isWishlisted}
-          onClick={() => toggleItem(storeItem)}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.wishlistIcon}>
-            <path
-              d="M12 20.25 4.9 13.45a4.7 4.7 0 0 1 0-6.78 4.87 4.87 0 0 1 6.87 0L12 6.9l.23-.23a4.87 4.87 0 0 1 6.87 0 4.7 4.7 0 0 1 0 6.78L12 20.25Z"
-              fill={isWishlisted ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.8"
-            />
-          </svg>
-          <span>{isWishlisted ? "В обраному" : "Додати в обране"}</span>
-        </button>
+        <div className={styles.actionButtons}>
+          <button
+            type="button"
+            className={`${styles.actionButton} ${styles.cartButton} ${isInCart ? styles.cartButtonActive : ""}`}
+            aria-label={isInCart ? "Прибрати з кошика" : "Додати до кошика"}
+            aria-pressed={isInCart}
+            disabled={!canAddToCart}
+            onClick={() => {
+              if (!canAddToCart) {
+                return;
+              }
+
+              toggleCartItem({
+                ...storeItem,
+                quantity: effectiveQuantity,
+              });
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.actionIcon}>
+              <path
+                d="M3.75 5.25h1.9l1.35 8.1a1.5 1.5 0 0 0 1.48 1.25h7.76a1.5 1.5 0 0 0 1.47-1.19l1.12-5.41H7.27"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+              <circle cx="9.2" cy="18.15" r="1.15" fill="currentColor" />
+              <circle cx="16.95" cy="18.15" r="1.15" fill="currentColor" />
+            </svg>
+            <span>{isInCart ? "У кошику" : "До кошика"}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.actionButton} ${styles.wishlistButton} ${isWishlisted ? styles.wishlistButtonActive : ""}`}
+            aria-label={isWishlisted ? "Прибрати з обраного" : "Додати в обране"}
+            aria-pressed={isWishlisted}
+            onClick={() => toggleItem(storeItem)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.actionIcon}>
+              <path
+                d="M12 20.25 4.9 13.45a4.7 4.7 0 0 1 0-6.78 4.87 4.87 0 0 1 6.87 0L12 6.9l.23-.23a4.87 4.87 0 0 1 6.87 0 4.7 4.7 0 0 1 0 6.78L12 20.25Z"
+                fill={isWishlisted ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+            <span>{isWishlisted ? "В обраному" : "В обране"}</span>
+          </button>
+        </div>
       </div>
-
-      <Button
-        className={styles.cartButton}
-        size="large"
-        disabled={!canAddToCart}
-        onClick={() => {
-          if (!canAddToCart || !selectedVariant) {
-            return;
-          }
-
-          addItem({
-            ...storeItem,
-            quantity: currentQuantity,
-          });
-        }}
-      >
-        {addToCartLabel}
-      </Button>
     </section>
   );
 }
