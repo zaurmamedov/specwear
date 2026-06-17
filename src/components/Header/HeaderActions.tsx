@@ -12,6 +12,7 @@ type HeaderActionsProps = {
   cartHref: string;
   isWishlistActive: boolean;
   isCartActive: boolean;
+  onLinkClick?: () => void;
 };
 
 export function HeaderActions({
@@ -19,6 +20,7 @@ export function HeaderActions({
   cartHref,
   isWishlistActive,
   isCartActive,
+  onLinkClick,
 }: HeaderActionsProps) {
   const cartItems = useCartStore((state) => state.items);
   const wishlistItems = useWishlistStore((state) => state.items);
@@ -33,6 +35,7 @@ export function HeaderActions({
         className={`${styles.utilityLink} ${isWishlistActive ? styles.utilityLinkActive : ""}`}
         aria-label="Обране"
         aria-current={isWishlistActive ? "page" : undefined}
+        onClick={onLinkClick}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.utilityIcon}>
           <path
@@ -54,6 +57,7 @@ export function HeaderActions({
         className={`${styles.utilityLink} ${isCartActive ? styles.utilityLinkActive : ""}`}
         aria-label="Кошик"
         aria-current={isCartActive ? "page" : undefined}
+        onClick={onLinkClick}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.utilityIcon}>
           <path

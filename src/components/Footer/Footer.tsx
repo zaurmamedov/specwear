@@ -6,6 +6,8 @@ const footerLinks = [
   { href: "/", label: "Головна" },
   { href: "/catalog", label: "Каталог" },
   { href: "/wholesale", label: "Опт" },
+  { href: "/delivery-payment", label: "Доставка і оплата" },
+  { href: "/exchange-return", label: "Обмін та повернення" },
   { href: "/contacts", label: "Контакти" },
 ];
 

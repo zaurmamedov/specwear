@@ -11,6 +11,7 @@ export interface ProductStoreItem {
   color?: string | null;
   categoryName?: string | null;
   brandName?: string | null;
+  stockQuantity?: number | null;
 }
 
 export interface CartItem extends ProductStoreItem {

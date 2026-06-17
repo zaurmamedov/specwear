@@ -81,7 +81,8 @@
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   min-width: 0;
   padding: 0.9rem 1rem;
@@ -97,15 +98,74 @@
 }
 
 .field input:focus-visible,
-.field textarea:focus-visible {
+.field textarea:focus-visible,
+.field select:focus-visible {
   outline: 2px solid rgba(249, 115, 22, 0.32);
   outline-offset: 2px;
   border-color: rgba(249, 115, 22, 0.38);
 }
 
 .field input[aria-invalid="true"],
-.field textarea[aria-invalid="true"] {
+.field textarea[aria-invalid="true"],
+.field select[aria-invalid="true"] {
   border-color: rgba(220, 38, 38, 0.45);
+}
+
+.autocomplete {
+  position: relative;
+}
+
+.autocompletePanel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 15;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.autocompleteState {
+  padding: 0.85rem 1rem;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.autocompleteOption {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-bottom: 1px solid rgba(17, 19, 21, 0.06);
+  background: var(--color-surface);
+  color: var(--color-dark);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.autocompleteOption:last-child {
+  border-bottom: 0;
+}
+
+.autocompleteOption:hover,
+.autocompleteOption:focus-visible {
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.autocompleteMeta {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  max-width: 55%;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .choiceGrid,

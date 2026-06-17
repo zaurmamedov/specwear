@@ -213,6 +213,11 @@
   background: rgba(17, 19, 21, 0.02);
 }
 
+.quantityButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .quantityValue {
   min-width: 2rem;
   text-align: center;

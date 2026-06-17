@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Barlow, Barlow_Condensed } from "next/font/google";
 
-import { Footer } from "@/components/Footer";
-import { Header } from "@/components/Header";
+import { AppFrame } from "@/components/AppFrame";
 
 import "./globals.css";
 
@@ -35,9 +34,7 @@ export default function RootLayout({
   return (
     <html lang="uk" className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <body>
-        <Header />
-        {children}
-        <Footer />
+        <AppFrame>{children}</AppFrame>
       </body>
     </html>
   );

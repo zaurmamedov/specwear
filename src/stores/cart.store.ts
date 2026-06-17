@@ -29,29 +29,68 @@ function isSameCartItem(
   return item.productId === productId && (item.variantId ?? null) === (variantId ?? null);
 }
 
+function getItemStockLimit(item: Pick<CartItem, "stockQuantity" | "quantity">) {
+  if (typeof item.stockQuantity === "number" && item.stockQuantity > 0) {
+    return item.stockQuantity;
+  }
+
+  return Math.max(1, item.quantity);
+}
+
+function clampCartQuantity(
+  quantity: number,
+  item: Pick<CartItem, "stockQuantity" | "quantity">
+) {
+  return Math.min(Math.max(1, quantity), getItemStockLimit(item));
+}
+
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
       addItem: (item) =>
         set((state) => {
+          const nextItem = {
+            ...item,
+            stockQuantity:
+              typeof item.stockQuantity === "number" && item.stockQuantity >= 0
+                ? item.stockQuantity
+                : null,
+          };
           const quantity = item.quantity ?? 1;
           const existingItem = state.items.find((cartItem) =>
             isSameCartItem(cartItem, item.productId, item.variantId)
           );
 
           if (existingItem) {
+            const mergedItem = {
+              ...existingItem,
+              ...nextItem,
+            };
+            const nextQuantity = clampCartQuantity(
+              existingItem.quantity + quantity,
+              mergedItem
+            );
+
             return {
               items: state.items.map((cartItem) =>
                 isSameCartItem(cartItem, item.productId, item.variantId)
-                  ? { ...cartItem, quantity: cartItem.quantity + quantity }
+                  ? { ...mergedItem, quantity: nextQuantity }
                   : cartItem
               ),
             };
           }
 
+          const normalizedNewItem = {
+            ...nextItem,
+            quantity: clampCartQuantity(quantity, {
+              stockQuantity: nextItem.stockQuantity ?? null,
+              quantity: 1,
+            }),
+          };
+
           return {
-            items: [...state.items, { ...item, quantity }],
+            items: [...state.items, normalizedNewItem],
           };
         }),
       removeItem: (productId, variantId) =>
@@ -73,7 +112,7 @@ export const useCartStore = create<CartStore>()(
           return {
             items: state.items.map((item) =>
               isSameCartItem(item, productId, variantId)
-                ? { ...item, quantity }
+                ? { ...item, quantity: clampCartQuantity(quantity, item) }
                 : item
             ),
           };

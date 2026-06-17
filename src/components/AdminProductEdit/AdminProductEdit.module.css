@@ -1,0 +1,236 @@
+.page {
+  width: min(100% - (var(--container-gutter) * 2), var(--container-width));
+  margin: 0 auto;
+  padding: var(--space-3xl) 0;
+}
+
+.hero {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 56rem;
+  margin-bottom: var(--space-2xl);
+}
+
+.eyebrow {
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-dark);
+  font-weight: 700;
+}
+
+.backLink:hover {
+  color: var(--color-accent);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: var(--space-lg);
+}
+
+.sectionHeader h2,
+.cardHeader h3 {
+  color: var(--color-dark);
+}
+
+.sectionHeader p,
+.muted {
+  color: var(--color-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.field span {
+  color: var(--color-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(17, 19, 21, 0.02);
+  color: var(--color-dark);
+  font: inherit;
+}
+
+.field input,
+.field select {
+  min-height: 3rem;
+  padding: 0 0.95rem;
+}
+
+.field textarea {
+  resize: vertical;
+  padding: 0.85rem 0.95rem;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+.toggle input:focus-visible,
+.toggleCompact input:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.32);
+  outline-offset: 2px;
+  border-color: rgba(249, 115, 22, 0.4);
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.toggle,
+.toggleCompact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(17, 19, 21, 0.02);
+  color: var(--color-dark);
+  font-weight: 600;
+}
+
+.toggle input,
+.toggleCompact input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  accent-color: var(--color-accent);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.card {
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.actionButtons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.secondaryButton {
+  border-color: var(--color-border);
+  background: transparent;
+  color: var(--color-dark);
+}
+
+.secondaryButton:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.error,
+.errorMessage {
+  color: #b91c1c;
+}
+
+.successMessage {
+  color: #15803d;
+}
+
+.error,
+.successMessage,
+.errorMessage {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+@media (max-width: 1023px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldWide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: var(--space-2xl) 0;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .actions,
+  .actionButtons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

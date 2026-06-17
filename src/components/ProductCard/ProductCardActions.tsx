@@ -17,6 +17,7 @@ type ProductCardActionsProps = {
   sku: string | null;
   retailPrice: number | null;
   oldPrice: number | null;
+  stockQuantity: number | null;
   categoryName: string | null;
   brandName: string | null;
   canAddToCart: boolean;
@@ -35,6 +36,7 @@ export function ProductCardActions({
   sku,
   retailPrice,
   oldPrice,
+  stockQuantity,
   categoryName,
   brandName,
   canAddToCart,
@@ -63,7 +65,11 @@ export function ProductCardActions({
         (item.variantId ?? null) === (variantId ?? null)
     ) ?? null;
   const isInCart = cartItem !== null;
-  const currentQuantity = cartItem?.quantity ?? pendingQuantity;
+  const maxQuantity =
+    typeof stockQuantity === "number" && stockQuantity > 0
+      ? stockQuantity
+      : Math.max(1, cartItem?.quantity ?? pendingQuantity);
+  const currentQuantity = Math.min(cartItem?.quantity ?? pendingQuantity, maxQuantity);
   const canDirectAddToCart = hasSinglePurchasableVariant;
   const shouldRouteToDetails = hasMultipleVariants && hasPurchasableVariant;
   const isUnavailable = !hasActiveVariants || (!shouldRouteToDetails && !canAddToCart);
@@ -81,6 +87,7 @@ export function ProductCardActions({
     color: null,
     categoryName,
     brandName,
+    stockQuantity,
   };
 
   return (
@@ -93,7 +100,11 @@ export function ProductCardActions({
             aria-label="Зменшити кількість"
             onClick={() => {
               if (isInCart && cartItem) {
-                setQuantity(productId, Math.max(1, cartItem.quantity - 1), variantId);
+                setQuantity(
+                  productId,
+                  Math.max(1, cartItem.quantity - 1),
+                  variantId
+                );
                 return;
               }
 
@@ -109,12 +120,17 @@ export function ProductCardActions({
             aria-label="Збільшити кількість"
             onClick={() => {
               if (isInCart && cartItem) {
-                setQuantity(productId, cartItem.quantity + 1, variantId);
+                setQuantity(
+                  productId,
+                  Math.min(maxQuantity, cartItem.quantity + 1),
+                  variantId
+                );
                 return;
               }
 
-              setPendingQuantity((current) => current + 1);
+              setPendingQuantity((current) => Math.min(maxQuantity, current + 1));
             }}
+            disabled={currentQuantity >= maxQuantity}
           >
             +
           </button>

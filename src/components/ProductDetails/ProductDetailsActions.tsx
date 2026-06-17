@@ -243,6 +243,7 @@ export function ProductDetailsActions({
     color: selectedVariant?.color ?? null,
     categoryName,
     brandName,
+    stockQuantity: selectedVariant?.stock_quantity ?? null,
   };
   const effectiveQuantity = cartItem?.quantity ?? currentQuantity;
 

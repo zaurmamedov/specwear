@@ -248,6 +248,16 @@
   outline-offset: -2px;
 }
 
+.quantityButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.quantityButton:disabled:hover {
+  color: var(--color-dark);
+  background: transparent;
+}
+
 .quantityValue {
   min-width: 1.8rem;
   text-align: center;

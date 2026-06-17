@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { HeaderActions } from "./HeaderActions";
+import { HeaderSearch } from "./HeaderSearch";
 import styles from "./Header.module.css";
 
 const primaryLinks = [
@@ -15,16 +16,10 @@ const primaryLinks = [
   { href: "/contacts", label: "Контакти" },
 ];
 
-const utilityLinks = [
-  { href: "/favourite", label: "Обране" },
-  { href: "/cart", label: "Кошик" },
-];
-
-const mobileLinks = [...primaryLinks, ...utilityLinks];
-
 export function Header() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -59,10 +54,15 @@ export function Header() {
   const isActiveLink = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  function closeOverlays() {
+    setIsMenuOpen(false);
+    setIsSearchOpen(false);
+  }
+
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.brand}>
+        <Link href="/" className={styles.brand} onClick={closeOverlays}>
           <span className={styles.brandMark} />
           <span>SpecWear</span>
         </Link>
@@ -74,18 +74,12 @@ export function Header() {
               href={link.href}
               className={`${styles.navLink} ${isActiveLink(link.href) ? styles.navLinkActive : ""}`}
               aria-current={isActiveLink(link.href) ? "page" : undefined}
+              onClick={() => setIsSearchOpen(false)}
             >
               {link.label}
             </Link>
           ))}
         </nav>
-
-        <HeaderActions
-          wishlistHref="/favourite"
-          cartHref="/cart"
-          isWishlistActive={isActiveLink("/favourite")}
-          isCartActive={isActiveLink("/cart")}
-        />
 
         <button
           type="button"
@@ -93,12 +87,34 @@ export function Header() {
           aria-expanded={isMenuOpen}
           aria-controls="mobile-navigation"
           aria-label={isMenuOpen ? "Закрити меню" : "Відкрити меню"}
-          onClick={() => setIsMenuOpen((current) => !current)}
+          onClick={() => {
+            setIsSearchOpen(false);
+            setIsMenuOpen((current) => !current);
+          }}
         >
           <span className={styles.menuLine} />
           <span className={styles.menuLine} />
           <span className={styles.menuLine} />
         </button>
+
+        <div className={styles.headerTools}>
+          <HeaderSearch
+            isOpen={isSearchOpen}
+            onOpen={() => {
+              setIsMenuOpen(false);
+              setIsSearchOpen(true);
+            }}
+            onClose={() => setIsSearchOpen(false)}
+          />
+
+          <HeaderActions
+            wishlistHref="/favourite"
+            cartHref="/cart"
+            isWishlistActive={isActiveLink("/favourite")}
+            isCartActive={isActiveLink("/cart")}
+            onLinkClick={() => setIsSearchOpen(false)}
+          />
+        </div>
       </div>
 
       <div
@@ -119,7 +135,7 @@ export function Header() {
         </div>
 
         <nav aria-label="Мобільна навігація" className={styles.mobileNav}>
-          {mobileLinks.map((link) => (
+          {primaryLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}

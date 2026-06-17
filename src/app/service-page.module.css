@@ -1,0 +1,91 @@
+.page {
+  width: min(100% - (var(--container-gutter) * 2), var(--container-width));
+  margin: 0 auto;
+  padding: var(--space-3xl) 0;
+}
+
+.hero {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 52rem;
+  margin-bottom: var(--space-2xl);
+}
+
+.eyebrow {
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.hero h1,
+.section h2 {
+  color: var(--color-dark);
+}
+
+.hero p {
+  max-width: 44rem;
+  color: var(--color-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-sm);
+  padding: clamp(1.15rem, 1.8vw, 1.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 248, 250, 0.96)),
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), transparent 38%);
+  box-shadow: var(--shadow-sm);
+}
+
+.section p,
+.section li {
+  color: var(--color-muted);
+}
+
+.list {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.steps {
+  display: grid;
+  gap: 0.6rem;
+  padding-left: 1.25rem;
+}
+
+.steps li::marker {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.highlight {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 22, 0.08);
+  color: var(--color-dark);
+}
+
+@media (max-width: 1023px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: var(--space-2xl) 0;
+  }
+}

@@ -21,6 +21,11 @@ export function CartItem({ item }: CartItemProps) {
   const setQuantity = useCartStore((state) => state.setQuantity);
 
   const itemSubtotal = (item.price ?? 0) * item.quantity;
+  const maxQuantity =
+    typeof item.stockQuantity === "number" && item.stockQuantity > 0
+      ? item.stockQuantity
+      : item.quantity;
+  const canIncrease = item.quantity < maxQuantity;
 
   return (
     <article className={styles.item}>
@@ -104,8 +109,13 @@ export function CartItem({ item }: CartItemProps) {
               className={styles.quantityButton}
               aria-label="Збільшити кількість"
               onClick={() =>
-                setQuantity(item.productId, item.quantity + 1, item.variantId)
+                setQuantity(
+                  item.productId,
+                  Math.min(maxQuantity, item.quantity + 1),
+                  item.variantId
+                )
               }
+              disabled={!canIncrease}
             >
               +
             </button>
