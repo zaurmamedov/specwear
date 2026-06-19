@@ -54,6 +54,7 @@ export interface AdminEditableProduct {
   product_variants: Pick<
     ProductVariant,
     | "id"
+    | "product_id"
     | "size"
     | "color"
     | "sku"
@@ -62,9 +63,21 @@ export interface AdminEditableProduct {
     | "wholesale_price"
     | "stock_quantity"
     | "is_active"
+    | "created_at"
     | "updated_at"
   >[];
 }
+
+export type AdminProductVariantInput = {
+  sku: string | null;
+  size: string | null;
+  color: string | null;
+  retail_price: number;
+  old_price: number | null;
+  wholesale_price: number | null;
+  stock_quantity: number;
+  is_active: boolean;
+};
 
 export type AdminProductUpdateInput = {
   name: string;

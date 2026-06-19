@@ -3,18 +3,32 @@ import { cache } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { ProductCardData } from "@/types/product";
 
+export type AvailabilityFilter = "in_stock" | "out_of_stock";
+
 export type ProductFilters = {
   category?: string | null;
-  brand?: string | null;
-  size?: string | null;
-  color?: string | null;
+  brand?: string[] | null;
+  size?: string[] | null;
+  color?: string[] | null;
+  availability?: AvailabilityFilter[] | null;
   q?: string | null;
   sort?: ProductSort | null;
 };
 
 export type VariantFilterOptions = {
+  brands: Array<{ slug: string; name: string }>;
   sizes: string[];
   colors: string[];
+  availability: AvailabilityFilter[];
+};
+
+export type ProductFilterPreviewItem = {
+  categorySlug: string | null;
+  brandSlug: string | null;
+  brandName: string | null;
+  sizes: string[];
+  colors: string[];
+  inStock: boolean;
 };
 
 export type ProductSort =
@@ -24,21 +38,29 @@ export type ProductSort =
   | "newest"
   | "name_asc";
 
-const productSelect = buildProductSelect();
+const productSelect = `
+  *,
+  brand:brands(*),
+  category:categories(id, name, slug),
+  product_images(*),
+  product_variants(*)
+`;
 
-function buildProductSelect(filters?: ProductFilters) {
-  const hasCategoryFilter = Boolean(filters?.category);
-  const hasBrandFilter = Boolean(filters?.brand);
-  const hasVariantFilter = Boolean(filters?.size || filters?.color);
+const getActiveProductsDataset = cache(async (): Promise<ProductCardData[]> => {
+  const { data, error } = await supabase
+    .from("products")
+    .select(productSelect)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .order("sort_order", { foreignTable: "product_images", ascending: true })
+    .order("retail_price", { foreignTable: "product_variants", ascending: true });
 
-  return `
-    *,
-    brand:brands${hasBrandFilter ? "!inner" : ""}(*),
-    category:categories${hasCategoryFilter ? "!inner" : ""}(id, name, slug),
-    product_images(*),
-    product_variants${hasVariantFilter ? "!inner" : ""}(*)
-  `;
-}
+  if (error) {
+    throw new Error(`Failed to fetch products: ${error.message}`);
+  }
+
+  return normalizeProductRows((data ?? []) as unknown as ProductCardData[]);
+});
 
 function normalizeProductRows(data: ProductCardData[] | null | undefined) {
   return (data ?? []).map((product) => ({
@@ -56,6 +78,12 @@ function getPrimaryPurchasablePrice(product: ProductCardData) {
     null;
 
   return variant?.retail_price ?? null;
+}
+
+function isProductInStock(product: ProductCardData) {
+  return product.product_variants.some(
+    (variant) => variant.is_active && variant.stock_quantity > 0
+  );
 }
 
 function matchesSearch(product: ProductCardData, rawQuery: string) {
@@ -76,6 +104,94 @@ function matchesSearch(product: ProductCardData, rawQuery: string) {
   ];
 
   return searchableValues.some((value) => value?.toLowerCase().includes(query));
+}
+
+function matchesMultiValue(
+  value: string | null | undefined,
+  selectedValues: string[] | null | undefined
+) {
+  if (!selectedValues || selectedValues.length === 0) {
+    return true;
+  }
+
+  if (!value) {
+    return false;
+  }
+
+  return selectedValues.includes(value);
+}
+
+function matchesVariantGroup(
+  product: ProductCardData,
+  selectedValues: string[] | null | undefined,
+  key: "size" | "color"
+) {
+  if (!selectedValues || selectedValues.length === 0) {
+    return true;
+  }
+
+  return product.product_variants.some((variant) => {
+    const variantValue = variant[key]?.trim();
+    return Boolean(variantValue && selectedValues.includes(variantValue));
+  });
+}
+
+function matchesAvailability(
+  product: ProductCardData,
+  selectedAvailability: AvailabilityFilter[] | null | undefined
+) {
+  if (!selectedAvailability || selectedAvailability.length === 0) {
+    return true;
+  }
+
+  const includesInStock = selectedAvailability.includes("in_stock");
+  const includesOutOfStock = selectedAvailability.includes("out_of_stock");
+
+  if (includesInStock && includesOutOfStock) {
+    return true;
+  }
+
+  const inStock = isProductInStock(product);
+
+  if (includesInStock) {
+    return inStock;
+  }
+
+  if (includesOutOfStock) {
+    return !inStock;
+  }
+
+  return true;
+}
+
+function filterProducts(products: ProductCardData[], filters?: ProductFilters) {
+  return products.filter((product) => {
+    if (filters?.category && product.category?.slug !== filters.category) {
+      return false;
+    }
+
+    if (!matchesMultiValue(product.brand?.slug, filters?.brand)) {
+      return false;
+    }
+
+    if (!matchesVariantGroup(product, filters?.size, "size")) {
+      return false;
+    }
+
+    if (!matchesVariantGroup(product, filters?.color, "color")) {
+      return false;
+    }
+
+    if (!matchesAvailability(product, filters?.availability)) {
+      return false;
+    }
+
+    if (filters?.q && !matchesSearch(product, filters.q)) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function sortProducts(products: ProductCardData[], sort?: ProductSort | null) {
@@ -141,54 +257,54 @@ function sortProducts(products: ProductCardData[], sort?: ProductSort | null) {
 }
 
 export async function getProducts(filters?: ProductFilters): Promise<ProductCardData[]> {
-  let query = supabase.from("products").select(buildProductSelect(filters));
+  const products = await getActiveProductsDataset();
+  const filteredProducts = filterProducts(products, filters);
 
-  query = query.eq("is_active", true);
-
-  if (filters?.category) {
-    query = query.eq("category.slug", filters.category);
-  }
-
-  if (filters?.brand) {
-    query = query.eq("brand.slug", filters.brand);
-  }
-
-  if (filters?.size) {
-    query = query.eq("product_variants.size", filters.size);
-  }
-
-  if (filters?.color) {
-    query = query.eq("product_variants.color", filters.color);
-  }
-
-  const { data, error } = await query
-    .order("created_at", { ascending: false })
-    .order("sort_order", { foreignTable: "product_images", ascending: true })
-    .order("retail_price", { foreignTable: "product_variants", ascending: true });
-
-  if (error) {
-    throw new Error(`Failed to fetch products: ${error.message}`);
-  }
-
-  const products = normalizeProductRows((data ?? []) as unknown as ProductCardData[]);
-  const searchedProducts = filters?.q ? products.filter((product) => matchesSearch(product, filters.q!)) : products;
-
-  return sortProducts(searchedProducts, filters?.sort ?? "default");
+  return sortProducts(filteredProducts, filters?.sort ?? "default");
 }
 
 export async function getAvailableVariantFilters(
   filters?: ProductFilters
 ): Promise<VariantFilterOptions> {
-  const products = await getProducts({
-    category: filters?.category ?? null,
-    brand: filters?.brand ?? null,
-    q: filters?.q ?? null,
+  const products = await getActiveProductsDataset();
+
+  const brandProducts = filterProducts(products, {
+    ...filters,
+    brand: [],
+    sort: "default",
+  });
+  const sizeProducts = filterProducts(products, {
+    ...filters,
+    size: [],
+    sort: "default",
+  });
+  const colorProducts = filterProducts(products, {
+    ...filters,
+    color: [],
+    sort: "default",
+  });
+  const availabilityProducts = filterProducts(products, {
+    ...filters,
+    availability: [],
     sort: "default",
   });
 
+  const brands = Array.from(
+    new Map(
+      brandProducts
+        .filter((product) => product.brand?.slug && product.brand?.name)
+        .map((product) => [product.brand!.slug, {
+          slug: product.brand!.slug,
+          name: product.brand!.name,
+        }])
+    ).values()
+  ).sort((left, right) =>
+    left.name.localeCompare(right.name, "uk", { sensitivity: "base" })
+  );
+
   const sizes = Array.from(
     new Set(
-      products.flatMap((product) =>
+      sizeProducts.flatMap((product) =>
         product.product_variants
           .map((variant) => variant.size?.trim())
           .filter((value): value is string => Boolean(value))
@@ -200,7 +316,7 @@ export async function getAvailableVariantFilters(
 
   const colors = Array.from(
     new Set(
-      products.flatMap((product) =>
+      colorProducts.flatMap((product) =>
         product.product_variants
           .map((variant) => variant.color?.trim())
           .filter((value): value is string => Boolean(value))
@@ -210,10 +326,49 @@ export async function getAvailableVariantFilters(
     left.localeCompare(right, "uk", { numeric: true, sensitivity: "base" })
   );
 
+  const availability: AvailabilityFilter[] = [];
+  const hasInStock = availabilityProducts.some((product) => isProductInStock(product));
+  const hasOutOfStock = availabilityProducts.some((product) => !isProductInStock(product));
+
+  if (hasInStock) {
+    availability.push("in_stock");
+  }
+
+  if (hasOutOfStock) {
+    availability.push("out_of_stock");
+  }
+
   return {
+    brands,
     sizes,
     colors,
+    availability,
   };
+}
+
+export async function getProductFilterPreviewData(): Promise<ProductFilterPreviewItem[]> {
+  const products = await getActiveProductsDataset();
+
+  return products.map((product) => ({
+    categorySlug: product.category?.slug ?? null,
+    brandSlug: product.brand?.slug ?? null,
+    brandName: product.brand?.name ?? null,
+    sizes: Array.from(
+      new Set(
+        product.product_variants
+          .map((variant) => variant.size?.trim())
+          .filter((value): value is string => Boolean(value))
+      )
+    ),
+    colors: Array.from(
+      new Set(
+        product.product_variants
+          .map((variant) => variant.color?.trim())
+          .filter((value): value is string => Boolean(value))
+      )
+    ),
+    inStock: isProductInStock(product),
+  }));
 }
 
 export const getProductBySlug = cache(

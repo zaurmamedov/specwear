@@ -9,8 +9,21 @@ import type {
   AdminProductFilters,
   AdminProductListItem,
   AdminProductSort,
+  AdminProductVariantInput,
   AdminProductUpdateInput,
 } from "@/types/admin-product";
+
+function toInteger(value: number) {
+  return Math.round(value);
+}
+
+function toOptionalInteger(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.round(value);
+}
 
 function normalizeProducts(products: AdminProductListItem[] | null | undefined) {
   return (products ?? []).map((product) => ({
@@ -176,6 +189,7 @@ export async function getAdminProductById(
       product_images(id, image_url, alt, sort_order, created_at),
       product_variants(
         id,
+        product_id,
         size,
         color,
         sku,
@@ -184,6 +198,7 @@ export async function getAdminProductById(
         wholesale_price,
         stock_quantity,
         is_active,
+        created_at,
         updated_at
       )
     `)
@@ -251,10 +266,10 @@ export async function updateAdminProduct(
         size: variant.size,
         color: variant.color,
         sku: variant.sku,
-        retail_price: variant.retail_price,
-        old_price: variant.old_price,
-        wholesale_price: variant.wholesale_price,
-        stock_quantity: variant.stock_quantity,
+        retail_price: toInteger(variant.retail_price),
+        old_price: toOptionalInteger(variant.old_price),
+        wholesale_price: toOptionalInteger(variant.wholesale_price),
+        stock_quantity: Math.max(0, toInteger(variant.stock_quantity)),
         is_active: variant.is_active,
         updated_at: updatedAt,
       })
@@ -319,10 +334,10 @@ export async function createAdminProduct(
     size: input.variant.size,
     color: input.variant.color,
     sku: input.variant.sku,
-    retail_price: input.variant.retail_price,
-    old_price: input.variant.old_price,
-    wholesale_price: input.variant.wholesale_price,
-    stock_quantity: input.variant.stock_quantity,
+    retail_price: toInteger(input.variant.retail_price),
+    old_price: toOptionalInteger(input.variant.old_price),
+    wholesale_price: toOptionalInteger(input.variant.wholesale_price),
+    stock_quantity: Math.max(0, toInteger(input.variant.stock_quantity)),
     is_active: input.variant.is_active,
     created_at: timestamp,
     updated_at: timestamp,
@@ -349,4 +364,79 @@ export async function createAdminProduct(
   }
 
   return productId;
+}
+
+export async function createAdminProductVariant(
+  productId: string,
+  input: AdminProductVariantInput
+): Promise<string> {
+  const supabase = createServerSupabaseAdminClient();
+  const variantId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  const { error } = await supabase.from("product_variants").insert({
+    id: variantId,
+    product_id: productId,
+    sku: input.sku,
+    size: input.size,
+    color: input.color,
+    retail_price: toInteger(input.retail_price),
+    old_price: toOptionalInteger(input.old_price),
+    wholesale_price: toOptionalInteger(input.wholesale_price),
+    stock_quantity: Math.max(0, toInteger(input.stock_quantity)),
+    is_active: input.is_active,
+    created_at: timestamp,
+    updated_at: timestamp,
+  });
+
+  if (error) {
+    throw new Error(`Failed to create product variant: ${error.message}`);
+  }
+
+  return variantId;
+}
+
+export async function updateAdminProductVariant(
+  variantId: string,
+  productId: string,
+  input: AdminProductVariantInput
+): Promise<void> {
+  const supabase = createServerSupabaseAdminClient();
+  const updatedAt = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("product_variants")
+    .update({
+      sku: input.sku,
+      size: input.size,
+      color: input.color,
+      retail_price: toInteger(input.retail_price),
+      old_price: toOptionalInteger(input.old_price),
+      wholesale_price: toOptionalInteger(input.wholesale_price),
+      stock_quantity: Math.max(0, toInteger(input.stock_quantity)),
+      is_active: input.is_active,
+      updated_at: updatedAt,
+    })
+    .eq("id", variantId)
+    .eq("product_id", productId);
+
+  if (error) {
+    throw new Error(`Failed to update product variant: ${error.message}`);
+  }
+}
+
+export async function deleteAdminProductVariant(
+  variantId: string,
+  productId: string
+): Promise<void> {
+  const supabase = createServerSupabaseAdminClient();
+  const { error } = await supabase
+    .from("product_variants")
+    .delete()
+    .eq("id", variantId)
+    .eq("product_id", productId);
+
+  if (error) {
+    throw new Error(`Failed to delete product variant: ${error.message}`);
+  }
 }

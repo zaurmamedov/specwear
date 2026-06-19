@@ -82,6 +82,8 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .field input,
@@ -202,6 +204,214 @@
   color: #15803d;
 }
 
+.variantToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+}
+
+.stockSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 22, 0.08);
+  color: var(--color-dark);
+  font-weight: 700;
+}
+
+.variantEditor,
+.inlineEditor,
+.modalDialog {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.variantFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.variantTableWrap {
+  overflow-x: auto;
+}
+
+.variantTable {
+  width: 100%;
+  min-width: 54rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.variantTable th,
+.variantTable td {
+  padding: 0.9rem 0.75rem;
+  border-bottom: 1px solid rgba(17, 19, 21, 0.08);
+  vertical-align: top;
+  text-align: left;
+  color: var(--color-dark);
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.variantTable th {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.variantCards {
+  display: none;
+  gap: var(--space-md);
+}
+
+.variantCard {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.variantMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.rowActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.statusBadge,
+.stockBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.statusBadgeActive {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.statusBadgeInactive {
+  background: rgba(71, 85, 105, 0.12);
+  color: #475569;
+}
+
+.stockBadgeOk {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.stockBadgeLow {
+  background: rgba(249, 115, 22, 0.14);
+  color: #c2410c;
+}
+
+.stockBadgeOut {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.dangerButton {
+  border-color: rgba(185, 28, 28, 0.24);
+  background: rgba(185, 28, 28, 0.06);
+  color: #b91c1c;
+}
+
+.dangerButton:hover {
+  border-color: rgba(185, 28, 28, 0.42);
+  background: rgba(185, 28, 28, 0.12);
+  color: #991b1b;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  background: rgba(17, 19, 21, 0.6);
+}
+
+.modalDialog {
+  width: min(100%, 50rem);
+  max-width: 50rem;
+  max-height: min(90dvh, 52rem);
+  overflow: auto;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.modalBody {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.modalClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-dark);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.modalClose:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.modalClose:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .error,
 .successMessage,
 .errorMessage {
@@ -214,8 +424,16 @@
     grid-template-columns: 1fr;
   }
 
+  .variantFormGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .fieldWide {
     grid-column: auto;
+  }
+
+  .variantTable {
+    min-width: 0;
   }
 }
 
@@ -229,8 +447,41 @@
   }
 
   .actions,
-  .actionButtons {
+  .actionButtons,
+  .rowActions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .variantToolbar {
+    align-items: stretch;
+  }
+
+  .variantTableWrap {
+    display: none;
+  }
+
+  .variantCards {
+    display: grid;
+  }
+
+  .variantEditor,
+  .inlineEditor,
+  .modalDialog,
+  .variantCard {
+    padding: 1rem;
+  }
+
+  .variantFormGrid,
+  .modalActions {
+    grid-template-columns: 1fr;
+  }
+
+  .variantFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .modalActions {
+    display: grid;
   }
 }

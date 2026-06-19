@@ -41,12 +41,12 @@ function toOptionalNumber(value: string) {
   }
 
   const parsed = Number(next);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
 function toRequiredNumber(value: string, fallback = 0) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback;
 }
 
 export function AdminProductCreateForm({
@@ -103,8 +103,12 @@ export function AdminProductCreateForm({
 
   function validateForm() {
     const nextErrors: FormErrors = {};
-    const retailPriceValue = Number(retailPrice);
-    const stockQuantityValue = Number(stockQuantity);
+    const retailPriceValue = Math.round(Number(retailPrice));
+    const stockQuantityValue = Number.parseInt(stockQuantity, 10);
+    const oldPriceValue = oldPrice.trim() ? Math.round(Number(oldPrice)) : null;
+    const wholesalePriceValue = wholesalePrice.trim()
+      ? Math.round(Number(wholesalePrice))
+      : null;
 
     if (!name.trim()) {
       nextErrors.name = "Вкажіть назву товару.";
@@ -126,6 +130,17 @@ export function AdminProductCreateForm({
 
     if (!Number.isFinite(stockQuantityValue) || stockQuantityValue < 0) {
       nextErrors.stock_quantity = "Вкажіть коректний залишок.";
+    }
+
+    if (oldPrice.trim() && (!Number.isFinite(oldPriceValue) || (oldPriceValue ?? 0) < 0)) {
+      nextErrors.old_price = "Вкажіть коректну стару ціну.";
+    }
+
+    if (
+      wholesalePrice.trim() &&
+      (!Number.isFinite(wholesalePriceValue) || (wholesalePriceValue ?? 0) < 0)
+    ) {
+      nextErrors.wholesale_price = "Вкажіть коректну оптову ціну.";
     }
 
     if (imageUrl.trim() && !Number.isFinite(Number(sortOrder))) {
@@ -369,7 +384,7 @@ export function AdminProductCreateForm({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={retailPrice}
                 onChange={(event) => setRetailPrice(event.target.value)}
               />
@@ -383,10 +398,11 @@ export function AdminProductCreateForm({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={oldPrice}
                 onChange={(event) => setOldPrice(event.target.value)}
               />
+              {errors.old_price ? <small className={styles.error}>{errors.old_price}</small> : null}
             </label>
 
             <label className={styles.field}>
@@ -394,10 +410,13 @@ export function AdminProductCreateForm({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={wholesalePrice}
                 onChange={(event) => setWholesalePrice(event.target.value)}
               />
+              {errors.wholesale_price ? (
+                <small className={styles.error}>{errors.wholesale_price}</small>
+              ) : null}
             </label>
 
             <label className={styles.field}>

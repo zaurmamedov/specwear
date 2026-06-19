@@ -17,15 +17,15 @@ function normalizeOptionalText(value: unknown) {
   return text ? text : null;
 }
 
-function normalizeNumber(value: unknown, fallback = 0) {
+function normalizeInteger(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
+    return Math.round(value);
   }
 
   if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) {
-      return parsed;
+      return Math.round(parsed);
     }
   }
 
@@ -49,8 +49,8 @@ export async function POST(request: Request) {
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
-    const retailPrice = normalizeNumber(body.variant?.retail_price, Number.NaN);
-    const stockQuantity = normalizeNumber(body.variant?.stock_quantity, Number.NaN);
+    const retailPrice = normalizeInteger(body.variant?.retail_price, Number.NaN);
+    const stockQuantity = normalizeInteger(body.variant?.stock_quantity, Number.NaN);
 
     if (!name) {
       return NextResponse.json(
@@ -108,12 +108,12 @@ export async function POST(request: Request) {
         old_price:
           body.variant?.old_price === null || body.variant?.old_price === undefined
             ? null
-            : normalizeNumber(body.variant.old_price),
+            : normalizeInteger(body.variant.old_price),
         wholesale_price:
           body.variant?.wholesale_price === null ||
           body.variant?.wholesale_price === undefined
             ? null
-            : normalizeNumber(body.variant.wholesale_price),
+            : normalizeInteger(body.variant.wholesale_price),
         stock_quantity: stockQuantity,
         is_active: body.variant?.is_active ?? true,
       },
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         sort_order:
           body.image?.sort_order === null || body.image?.sort_order === undefined
             ? null
-            : normalizeNumber(body.image.sort_order),
+            : normalizeInteger(body.image.sort_order),
       },
     };
 

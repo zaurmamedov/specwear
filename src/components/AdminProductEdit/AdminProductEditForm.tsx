@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/Button";
+import { AdminProductVariantsSection } from "@/components/AdminProductEdit/AdminProductVariantsSection";
 import type {
   AdminEditableProduct,
   AdminProductUpdateInput,
@@ -23,7 +24,6 @@ type AdminProductEditFormProps = {
 
 type FormErrors = Partial<Record<string, string>>;
 
-type VariantFormState = AdminProductUpdateInput["variants"][number];
 type ImageFormState = AdminProductUpdateInput["images"][number];
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -31,16 +31,6 @@ const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 function toOptionalString(value: string) {
   const next = value.trim();
   return next ? next : null;
-}
-
-function toOptionalNumber(value: string) {
-  const next = value.trim();
-  if (!next) {
-    return null;
-  }
-
-  const parsed = Number(next);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toRequiredNumber(value: string, fallback = 0) {
@@ -69,19 +59,6 @@ export function AdminProductEditForm({
   const [isFeatured, setIsFeatured] = useState(product.is_featured);
   const [isNew, setIsNew] = useState(product.is_new);
   const [isSale, setIsSale] = useState(product.is_sale);
-  const [variants, setVariants] = useState<VariantFormState[]>(
-    product.product_variants.map((variant) => ({
-      id: variant.id,
-      size: variant.size ?? "",
-      color: variant.color ?? "",
-      sku: variant.sku ?? "",
-      retail_price: variant.retail_price,
-      old_price: variant.old_price,
-      wholesale_price: variant.wholesale_price,
-      stock_quantity: variant.stock_quantity,
-      is_active: variant.is_active,
-    }))
-  );
   const [images, setImages] = useState<ImageFormState[]>(
     product.product_images.map((image) => ({
       id: image.id,
@@ -103,23 +80,6 @@ export function AdminProductEditForm({
         }
       : null
   );
-
-  const hasWholesalePrice = useMemo(
-    () => variants.some((variant) => variant.wholesale_price !== null),
-    [variants]
-  );
-
-  function updateVariant(
-    variantId: string,
-    field: keyof VariantFormState,
-    value: string | number | boolean | null
-  ) {
-    setVariants((current) =>
-      current.map((variant) =>
-        variant.id === variantId ? { ...variant, [field]: value } : variant
-      )
-    );
-  }
 
   function updateImage(
     imageId: string,
@@ -149,16 +109,6 @@ export function AdminProductEditForm({
     if (!categoryId) {
       nextErrors.category_id = "Оберіть категорію.";
     }
-
-    variants.forEach((variant) => {
-      if (!Number.isFinite(Number(variant.retail_price))) {
-        nextErrors[`variant-retail-${variant.id}`] = "Вкажіть коректну роздрібну ціну.";
-      }
-
-      if (!Number.isFinite(Number(variant.stock_quantity))) {
-        nextErrors[`variant-stock-${variant.id}`] = "Вкажіть коректний залишок.";
-      }
-    });
 
     images.forEach((image) => {
       if (!image.image_url.trim()) {
@@ -193,17 +143,7 @@ export function AdminProductEditForm({
       is_featured: isFeatured,
       is_new: isNew,
       is_sale: isSale,
-      variants: variants.map((variant) => ({
-        id: variant.id,
-        size: toOptionalString(String(variant.size ?? "")),
-        color: toOptionalString(String(variant.color ?? "")),
-        sku: toOptionalString(String(variant.sku ?? "")),
-        retail_price: toRequiredNumber(String(variant.retail_price)),
-        old_price: toOptionalNumber(String(variant.old_price ?? "")),
-        wholesale_price: toOptionalNumber(String(variant.wholesale_price ?? "")),
-        stock_quantity: Math.max(0, toRequiredNumber(String(variant.stock_quantity))),
-        is_active: variant.is_active,
-      })),
+      variants: [],
       images: images.map((image) => ({
         id: image.id,
         image_url: image.image_url.trim(),
@@ -382,136 +322,11 @@ export function AdminProductEditForm({
           </div>
         </section>
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>Варіанти</h2>
-            <p>Редагування наявних записів у таблиці product_variants.</p>
-          </div>
-
-          <div className={styles.stack}>
-            {variants.length > 0 ? (
-              variants.map((variant, index) => (
-                <article key={variant.id} className={styles.card}>
-                  <div className={styles.cardHeader}>
-                    <h3>Варіант #{index + 1}</h3>
-                    <label className={styles.toggleCompact}>
-                      <input
-                        type="checkbox"
-                        checked={variant.is_active}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "is_active", event.target.checked)
-                        }
-                      />
-                      <span>Активний</span>
-                    </label>
-                  </div>
-
-                  <div className={styles.grid}>
-                    <label className={styles.field}>
-                      <span>Розмір</span>
-                      <input
-                        value={variant.size ?? ""}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "size", event.target.value)
-                        }
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Колір</span>
-                      <input
-                        value={variant.color ?? ""}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "color", event.target.value)
-                        }
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>SKU</span>
-                      <input
-                        value={variant.sku ?? ""}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "sku", event.target.value)
-                        }
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Роздрібна ціна</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={variant.retail_price}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "retail_price", event.target.value)
-                        }
-                      />
-                      {errors[`variant-retail-${variant.id}`] ? (
-                        <small className={styles.error}>
-                          {errors[`variant-retail-${variant.id}`]}
-                        </small>
-                      ) : null}
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Стара ціна</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={variant.old_price ?? ""}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "old_price", event.target.value)
-                        }
-                      />
-                    </label>
-
-                    {hasWholesalePrice ? (
-                      <label className={styles.field}>
-                        <span>Оптова ціна</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={variant.wholesale_price ?? ""}
-                          onChange={(event) =>
-                            updateVariant(
-                              variant.id,
-                              "wholesale_price",
-                              event.target.value
-                            )
-                          }
-                        />
-                      </label>
-                    ) : null}
-
-                    <label className={styles.field}>
-                      <span>Залишок</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={variant.stock_quantity}
-                        onChange={(event) =>
-                          updateVariant(variant.id, "stock_quantity", event.target.value)
-                        }
-                      />
-                      {errors[`variant-stock-${variant.id}`] ? (
-                        <small className={styles.error}>
-                          {errors[`variant-stock-${variant.id}`]}
-                        </small>
-                      ) : null}
-                    </label>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className={styles.muted}>Для цього товару ще немає варіантів.</p>
-            )}
-          </div>
-        </section>
+        <AdminProductVariantsSection
+          productId={product.id}
+          productSlug={product.slug}
+          variants={product.product_variants}
+        />
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
