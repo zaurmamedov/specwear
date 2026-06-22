@@ -40,18 +40,21 @@
   gap: clamp(1.5rem, 3vw, 3rem);
   align-items: start;
   margin-bottom: var(--space-2xl);
+  min-width: 0;
 }
 
 .galleryColumn,
 .infoColumn {
   display: grid;
   gap: var(--space-lg);
+  min-width: 0;
 }
 
 .galleryLayout {
   display: grid;
   gap: var(--space-md);
   align-items: start;
+  min-width: 0;
 }
 
 .galleryLayoutWithThumbs {
@@ -64,6 +67,8 @@
 
 .primaryMedia {
   position: relative;
+  width: 100%;
+  max-width: 100%;
   aspect-ratio: 5 / 6;
   min-height: min(44rem, 72vh);
   overflow: hidden;
@@ -109,6 +114,7 @@
 
 .thumbnail {
   position: relative;
+  width: 100%;
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border: 1px solid var(--color-border);
@@ -116,13 +122,32 @@
   background: var(--color-surface);
 }
 
+.thumbnailButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.thumbnailButton:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.35);
+  outline-offset: 3px;
+}
+
+.thumbnailActive .thumbnail {
+  border-color: rgba(249, 115, 22, 0.55);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.14);
+}
+
 .heading {
   display: grid;
   gap: var(--space-sm);
+  min-width: 0;
 }
 
 .heading h1 {
   color: var(--color-dark);
+  overflow-wrap: break-word;
 }
 
 .metaRow {
@@ -397,6 +422,7 @@
 
 .descriptionSection {
   width: 100%;
+  min-width: 0;
 }
 
 .descriptionBlock p {
@@ -405,7 +431,7 @@
 
 @media (max-width: 1279px) {
   .productHero {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
   }
 
   .primaryMedia {
@@ -425,6 +451,11 @@
   .productHero {
     grid-template-columns: 1fr;
     margin-bottom: var(--space-xl);
+  }
+
+  .galleryColumn,
+  .infoColumn {
+    min-width: 0;
   }
 
   .galleryLayout {
@@ -450,6 +481,19 @@
 }
 
 @media (max-width: 767px) {
+  .page {
+    padding: var(--space-xl) 0;
+  }
+
+  .topBar {
+    gap: var(--space-sm);
+  }
+
+  .breadcrumbs {
+    font-size: var(--font-size-xs);
+    gap: 0.35rem;
+  }
+
   .controlsRow {
     align-items: stretch;
   }
@@ -470,7 +514,7 @@
     padding: var(--space-lg);
   }
 
-  .thumbnailGrid {
+  .thumbnailGridMobile {
     grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr));
   }
 

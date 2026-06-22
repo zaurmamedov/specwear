@@ -1,11 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
 
 import { BackButton } from "@/components/BackButton";
-import { isSupabaseStorageUrl, isValidImageUrl } from "@/lib/images";
+import { isValidImageUrl } from "@/lib/images";
 import type { ProductCardData, ProductImage } from "@/types/product";
 
 import { ProductDetailsActions } from "./ProductDetailsActions";
+import { ProductDetailsGallery } from "./ProductDetailsGallery";
 import styles from "./ProductDetails.module.css";
 
 type ProductDetailsProps = {
@@ -42,7 +42,6 @@ function getGalleryImages(product: ProductCardData): ProductImage[] {
 export function ProductDetails({ product }: ProductDetailsProps) {
   const galleryImages = getGalleryImages(product);
   const primaryImage = galleryImages[0] ?? null;
-  const hasMultipleImages = galleryImages.length > 1;
 
   return (
     <main className={styles.page}>
@@ -66,64 +65,11 @@ export function ProductDetails({ product }: ProductDetailsProps) {
       </div>
 
       <section className={styles.productHero}>
-        <div className={styles.galleryColumn}>
-          <div
-            className={`${styles.galleryLayout} ${
-              hasMultipleImages ? styles.galleryLayoutWithThumbs : styles.galleryLayoutSingle
-            }`}
-          >
-            {hasMultipleImages ? (
-              <div className={styles.thumbnailRail}>
-                {galleryImages.map((image) => (
-                  <div key={image.id} className={styles.thumbnail}>
-                    <Image
-                      src={image.image_url}
-                      alt={image.alt ?? product.name}
-                      fill
-                      unoptimized={isSupabaseStorageUrl(image.image_url)}
-                      sizes="(max-width: 767px) 25vw, 120px"
-                      className={styles.thumbnailImage}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className={styles.primaryMedia}>
-              {primaryImage ? (
-                <Image
-                  src={primaryImage.image_url}
-                  alt={primaryImage.alt ?? product.name}
-                  fill
-                  unoptimized={isSupabaseStorageUrl(primaryImage.image_url)}
-                  sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 42vw"
-                  className={styles.primaryImage}
-                />
-              ) : (
-                <div className={styles.mediaPlaceholder}>
-                  <span>{product.category?.name ?? "SpecWear"}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {hasMultipleImages ? (
-            <div className={styles.thumbnailGridMobile}>
-              {galleryImages.map((image) => (
-                <div key={image.id} className={styles.thumbnail}>
-                  <Image
-                    src={image.image_url}
-                    alt={image.alt ?? product.name}
-                    fill
-                    unoptimized={isSupabaseStorageUrl(image.image_url)}
-                    sizes="(max-width: 767px) 25vw, 140px"
-                    className={styles.thumbnailImage}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <ProductDetailsGallery
+          productName={product.name}
+          categoryName={product.category?.name ?? null}
+          images={galleryImages}
+        />
 
         <div className={styles.infoColumn}>
           <div className={styles.heading}>

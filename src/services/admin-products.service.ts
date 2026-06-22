@@ -13,6 +13,14 @@ import type {
   AdminProductUpdateInput,
 } from "@/types/admin-product";
 
+export const PRODUCT_IMAGES_BUCKET = "specwear_products";
+
+type AdminProductImageRecord = AdminEditableProduct["product_images"][number];
+type AdminProductImageState = {
+  images: AdminProductImageRecord[];
+  mainImageUrl: string | null;
+};
+
 function toInteger(value: number) {
   return Math.round(value);
 }
@@ -28,9 +36,7 @@ function toOptionalInteger(value: number | null) {
 function normalizeProducts(products: AdminProductListItem[] | null | undefined) {
   return (products ?? []).map((product) => ({
     ...product,
-    product_images: [...(product.product_images ?? [])].sort(
-      (left, right) => left.sort_order - right.sort_order
-    ),
+    product_images: sortProductImages(product.product_images ?? []),
     product_variants: (product.product_variants ?? []).filter((variant) => variant.is_active),
   }));
 }
@@ -93,6 +99,104 @@ function sortProducts(products: AdminProductListItem[], sort: AdminProductSort) 
           new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
       );
   }
+}
+
+function sortProductImages<T extends { sort_order: number; created_at?: string }>(images: T[]) {
+  return [...images].sort((left, right) => {
+    if (left.sort_order !== right.sort_order) {
+      return left.sort_order - right.sort_order;
+    }
+
+    return new Date(left.created_at ?? 0).getTime() - new Date(right.created_at ?? 0).getTime();
+  });
+}
+
+function normalizeProductImageOrder(images: AdminProductImageRecord[]) {
+  return sortProductImages(images).map((image, index) => ({
+    ...image,
+    sort_order: index,
+  }));
+}
+
+function extractStoragePathFromPublicUrl(imageUrl: string) {
+  try {
+    const url = new URL(imageUrl);
+    const marker = `/storage/v1/object/public/${PRODUCT_IMAGES_BUCKET}/`;
+    const index = url.pathname.indexOf(marker);
+
+    if (index === -1) {
+      return null;
+    }
+
+    return decodeURIComponent(url.pathname.slice(index + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+async function getProductImageState(
+  productId: string
+): Promise<AdminProductImageState> {
+  const supabase = createServerSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(`
+      id,
+      main_image_url,
+      product_images(id, image_url, alt, sort_order, created_at)
+    `)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch product images: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("Product not found.");
+  }
+
+  const product = data as unknown as Pick<AdminEditableProduct, "main_image_url" | "product_images">;
+
+  return {
+    images: sortProductImages(product.product_images ?? []),
+    mainImageUrl: product.main_image_url,
+  };
+}
+
+async function persistProductImageOrder(
+  productId: string,
+  images: AdminProductImageRecord[]
+): Promise<AdminProductImageState> {
+  const supabase = createServerSupabaseAdminClient();
+  const normalizedImages = normalizeProductImageOrder(images);
+
+  for (const image of normalizedImages) {
+    const { error } = await supabase
+      .from("product_images")
+      .update({ sort_order: image.sort_order })
+      .eq("id", image.id)
+      .eq("product_id", productId);
+
+    if (error) {
+      throw new Error(`Failed to update image order: ${error.message}`);
+    }
+  }
+
+  const mainImageUrl = normalizedImages[0]?.image_url ?? null;
+  const { error: productError } = await supabase
+    .from("products")
+    .update({ main_image_url: mainImageUrl })
+    .eq("id", productId);
+
+  if (productError) {
+    throw new Error(`Failed to update product main image: ${productError.message}`);
+  }
+
+  return {
+    images: normalizedImages,
+    mainImageUrl,
+  };
 }
 
 export async function getAdminProducts(
@@ -217,9 +321,7 @@ export async function getAdminProductById(
 
   return {
     ...product,
-    product_images: [...(product.product_images ?? [])].sort(
-      (left, right) => left.sort_order - right.sort_order
-    ),
+    product_images: sortProductImages(product.product_images ?? []),
     product_variants: [...(product.product_variants ?? [])].sort((left, right) => {
       const leftSku = left.sku ?? "";
       const rightSku = right.sku ?? "";
@@ -227,6 +329,155 @@ export async function getAdminProductById(
       return leftSku.localeCompare(rightSku, "uk", { sensitivity: "base" });
     }),
   };
+}
+
+export async function createAdminProductImage(
+  productId: string,
+  input: { imageUrl: string; alt?: string | null }
+): Promise<AdminProductImageState> {
+  const supabase = createServerSupabaseAdminClient();
+  const current = await getProductImageState(productId);
+  const imageId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const nextSortOrder =
+    current.images.length > 0
+      ? Math.max(...current.images.map((image) => image.sort_order)) + 1
+      : 0;
+
+  const newImage: AdminProductImageRecord = {
+    id: imageId,
+    image_url: input.imageUrl,
+    alt: input.alt ?? null,
+    sort_order: nextSortOrder,
+    created_at: timestamp,
+  };
+
+  const { error } = await supabase.from("product_images").insert({
+    id: imageId,
+    product_id: productId,
+    image_url: input.imageUrl,
+    alt: input.alt ?? null,
+    sort_order: newImage.sort_order,
+    created_at: timestamp,
+  });
+
+  if (error) {
+    throw new Error(`Failed to create product image: ${error.message}`);
+  }
+
+  if (current.images.length === 0) {
+    const { error: productError } = await supabase
+      .from("products")
+      .update({ main_image_url: input.imageUrl })
+      .eq("id", productId);
+
+    if (productError) {
+      throw new Error(`Failed to set primary product image: ${productError.message}`);
+    }
+
+    return {
+      images: [newImage],
+      mainImageUrl: input.imageUrl,
+    };
+  }
+
+  if (!current.mainImageUrl && current.images[0]?.image_url) {
+    const { error: productError } = await supabase
+      .from("products")
+      .update({ main_image_url: current.images[0].image_url })
+      .eq("id", productId);
+
+    if (productError) {
+      throw new Error(`Failed to preserve primary product image: ${productError.message}`);
+    }
+  }
+
+  return {
+    images: sortProductImages([...current.images, newImage]),
+    mainImageUrl: current.mainImageUrl ?? current.images[0]?.image_url ?? null,
+  };
+}
+
+export async function setAdminProductPrimaryImage(
+  productId: string,
+  imageId: string
+): Promise<AdminProductImageState> {
+  const current = await getProductImageState(productId);
+  const target = current.images.find((image) => image.id === imageId);
+
+  if (!target) {
+    throw new Error("Image not found.");
+  }
+
+  const nextImages = [target, ...current.images.filter((image) => image.id !== imageId)];
+  return persistProductImageOrder(productId, nextImages);
+}
+
+export async function moveAdminProductImage(
+  productId: string,
+  imageId: string,
+  direction: "up" | "down"
+): Promise<AdminProductImageState> {
+  const current = await getProductImageState(productId);
+  const index = current.images.findIndex((image) => image.id === imageId);
+
+  if (index === -1) {
+    throw new Error("Image not found.");
+  }
+
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= current.images.length) {
+    return {
+      images: current.images,
+      mainImageUrl: current.images[0]?.image_url ?? current.mainImageUrl ?? null,
+    };
+  }
+
+  const nextImages = [...current.images];
+  const [moved] = nextImages.splice(index, 1);
+  nextImages.splice(targetIndex, 0, moved);
+
+  return persistProductImageOrder(productId, nextImages);
+}
+
+export async function deleteAdminProductImage(
+  productId: string,
+  imageId: string
+): Promise<AdminProductImageState> {
+  const supabase = createServerSupabaseAdminClient();
+  const current = await getProductImageState(productId);
+  const target = current.images.find((image) => image.id === imageId);
+
+  if (!target) {
+    throw new Error("Image not found.");
+  }
+
+  const { error } = await supabase
+    .from("product_images")
+    .delete()
+    .eq("id", imageId)
+    .eq("product_id", productId);
+
+  if (error) {
+    throw new Error(`Failed to delete product image: ${error.message}`);
+  }
+
+  const storagePath = extractStoragePathFromPublicUrl(target.image_url);
+
+  if (storagePath) {
+    const { error: storageError } = await supabase.storage
+      .from(PRODUCT_IMAGES_BUCKET)
+      .remove([storagePath]);
+
+    if (storageError) {
+      throw new Error(`Failed to delete product image file: ${storageError.message}`);
+    }
+  }
+
+  return persistProductImageOrder(
+    productId,
+    current.images.filter((image) => image.id !== imageId)
+  );
 }
 
 export async function updateAdminProduct(
@@ -315,7 +566,7 @@ export async function createAdminProduct(
     description: input.description,
     category_id: input.category_id,
     brand_id: input.brand_id,
-    main_image_url: input.main_image_url,
+    main_image_url: input.main_image_url ?? input.image.image_url ?? null,
     is_active: input.is_active,
     is_featured: input.is_featured,
     is_new: input.is_new,

@@ -213,6 +213,84 @@
   margin-bottom: var(--space-lg);
 }
 
+.imageToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.dropzone {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border: 1px dashed rgba(249, 115, 22, 0.45);
+  border-radius: var(--radius-lg);
+  background: rgba(249, 115, 22, 0.05);
+  margin-bottom: var(--space-lg);
+}
+
+.uploadQueue {
+  display: grid;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.imageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-md);
+}
+
+.imageCard {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.imagePreview {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: rgba(17, 19, 21, 0.04);
+}
+
+.imagePreviewMedia {
+  object-fit: contain;
+}
+
+.primaryBadge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.92);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.imageMeta {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--color-dark);
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
 .stockSummary {
   display: inline-flex;
   align-items: center;
@@ -455,6 +533,10 @@
 
   .variantToolbar {
     align-items: stretch;
+  }
+
+  .imageGrid {
+    grid-template-columns: 1fr;
   }
 
   .variantTableWrap {

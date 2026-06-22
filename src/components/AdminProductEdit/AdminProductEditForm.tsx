@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/Button";
+import { AdminProductImagesSection } from "@/components/AdminProductEdit/AdminProductImagesSection";
 import { AdminProductVariantsSection } from "@/components/AdminProductEdit/AdminProductVariantsSection";
 import type {
   AdminEditableProduct,
@@ -24,18 +25,11 @@ type AdminProductEditFormProps = {
 
 type FormErrors = Partial<Record<string, string>>;
 
-type ImageFormState = AdminProductUpdateInput["images"][number];
-
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function toOptionalString(value: string) {
   const next = value.trim();
   return next ? next : null;
-}
-
-function toRequiredNumber(value: string, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export function AdminProductEditForm({
@@ -54,19 +48,13 @@ export function AdminProductEditForm({
   const [description, setDescription] = useState(product.description ?? "");
   const [categoryId, setCategoryId] = useState(product.category_id ?? "");
   const [brandId, setBrandId] = useState(product.brand_id ?? "");
-  const [mainImageUrl, setMainImageUrl] = useState(product.main_image_url ?? "");
+  const [mainImageUrl, setMainImageUrl] = useState<string | null>(
+    product.main_image_url ?? null
+  );
   const [isActive, setIsActive] = useState(product.is_active);
   const [isFeatured, setIsFeatured] = useState(product.is_featured);
   const [isNew, setIsNew] = useState(product.is_new);
   const [isSale, setIsSale] = useState(product.is_sale);
-  const [images, setImages] = useState<ImageFormState[]>(
-    product.product_images.map((image) => ({
-      id: image.id,
-      image_url: image.image_url,
-      alt: image.alt ?? "",
-      sort_order: image.sort_order,
-    }))
-  );
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -80,18 +68,6 @@ export function AdminProductEditForm({
         }
       : null
   );
-
-  function updateImage(
-    imageId: string,
-    field: keyof ImageFormState,
-    value: string | number | null
-  ) {
-    setImages((current) =>
-      current.map((image) =>
-        image.id === imageId ? { ...image, [field]: value } : image
-      )
-    );
-  }
 
   function validateForm() {
     const nextErrors: FormErrors = {};
@@ -109,12 +85,6 @@ export function AdminProductEditForm({
     if (!categoryId) {
       nextErrors.category_id = "Оберіть категорію.";
     }
-
-    images.forEach((image) => {
-      if (!image.image_url.trim()) {
-        nextErrors[`image-url-${image.id}`] = "Вкажіть URL зображення.";
-      }
-    });
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -138,18 +108,13 @@ export function AdminProductEditForm({
       description: toOptionalString(description),
       category_id: categoryId,
       brand_id: brandId || null,
-      main_image_url: toOptionalString(mainImageUrl),
+      main_image_url: mainImageUrl ? toOptionalString(mainImageUrl) : null,
       is_active: isActive,
       is_featured: isFeatured,
       is_new: isNew,
       is_sale: isSale,
       variants: [],
-      images: images.map((image) => ({
-        id: image.id,
-        image_url: image.image_url.trim(),
-        alt: toOptionalString(String(image.alt ?? "")),
-        sort_order: toRequiredNumber(String(image.sort_order)),
-      })),
+      images: [],
     };
 
     try {
@@ -220,14 +185,6 @@ export function AdminProductEditForm({
             <label className={styles.field}>
               <span>Модель</span>
               <input value={model} onChange={(event) => setModel(event.target.value)} />
-            </label>
-
-            <label className={styles.field}>
-              <span>Головне зображення URL</span>
-              <input
-                value={mainImageUrl}
-                onChange={(event) => setMainImageUrl(event.target.value)}
-              />
             </label>
 
             <label className={styles.field}>
@@ -328,63 +285,13 @@ export function AdminProductEditForm({
           variants={product.product_variants}
         />
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>Зображення</h2>
-            <p>Редагування наявних записів у таблиці product_images.</p>
-          </div>
-
-          <div className={styles.stack}>
-            {images.length > 0 ? (
-              images.map((image, index) => (
-                <article key={image.id} className={styles.card}>
-                  <div className={styles.cardHeader}>
-                    <h3>Зображення #{index + 1}</h3>
-                  </div>
-
-                  <div className={styles.grid}>
-                    <label className={`${styles.field} ${styles.fieldWide}`}>
-                      <span>Image URL</span>
-                      <input
-                        value={image.image_url}
-                        onChange={(event) =>
-                          updateImage(image.id, "image_url", event.target.value)
-                        }
-                      />
-                      {errors[`image-url-${image.id}`] ? (
-                        <small className={styles.error}>
-                          {errors[`image-url-${image.id}`]}
-                        </small>
-                      ) : null}
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Alt</span>
-                      <input
-                        value={image.alt ?? ""}
-                        onChange={(event) => updateImage(image.id, "alt", event.target.value)}
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Порядок сортування</span>
-                      <input
-                        type="number"
-                        step="1"
-                        value={image.sort_order}
-                        onChange={(event) =>
-                          updateImage(image.id, "sort_order", event.target.value)
-                        }
-                      />
-                    </label>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className={styles.muted}>Для цього товару ще немає зображень.</p>
-            )}
-          </div>
-        </section>
+        <AdminProductImagesSection
+          productId={product.id}
+          productSlug={product.slug}
+          productName={product.name}
+          images={product.product_images}
+          onMainImageUrlChange={setMainImageUrl}
+        />
 
         <div className={styles.actions}>
           {feedback ? (

@@ -1,74 +1,87 @@
 .page {
-  padding-bottom: var(--space-4xl);
+  background:
+    radial-gradient(circle at top center, rgba(249, 115, 22, 0.08), transparent 28rem),
+    linear-gradient(180deg, #f7f7f6 0%, #ffffff 28%, #f6f6f4 100%);
+  color: var(--color-text);
 }
 
 .container {
-  width: min(100% - (var(--container-gutter) * 2), var(--container-width));
+  width: min(calc(100% - (var(--container-gutter) * 2)), var(--container-width));
   margin: 0 auto;
 }
 
 .hero {
   position: relative;
   overflow: clip;
-  padding: var(--space-xl) 0 var(--space-3xl);
+  min-height: clamp(44rem, 82vh, 54rem);
+  background: var(--color-dark);
 }
 
-.hero::before {
-  content: "";
+.heroImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+.heroOverlay {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(120deg, rgba(17, 19, 21, 0.94), rgba(17, 19, 21, 0.76)),
-    linear-gradient(135deg, rgba(249, 115, 22, 0.24), transparent 38%);
+    linear-gradient(90deg, rgba(8, 10, 12, 0.9) 0%, rgba(8, 10, 12, 0.82) 36%, rgba(8, 10, 12, 0.34) 68%, rgba(8, 10, 12, 0.2) 100%),
+    linear-gradient(180deg, rgba(8, 10, 12, 0.22) 0%, rgba(8, 10, 12, 0.64) 100%);
 }
 
-.hero::after {
-  content: "";
-  position: absolute;
-  top: 8%;
-  right: max(-8rem, -10vw);
-  width: min(34vw, 25rem);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(249, 115, 22, 0.26), transparent 62%);
-  filter: blur(16px);
-}
-
-.heroLayout {
+.heroContent {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.55fr);
-  gap: clamp(1.5rem, 3vw, 3rem);
-  align-items: stretch;
+  min-height: clamp(34rem, 66vh, 42rem);
+  align-items: center;
+  padding: calc(var(--space-4xl) + var(--space-lg)) 0 var(--space-2xl);
 }
 
 .heroPanel {
   display: grid;
   gap: var(--space-lg);
-  align-content: center;
-  min-height: clamp(26rem, 56vw, 38rem);
-  padding: clamp(2rem, 5vw, 4.5rem) 0;
-}
-
-.heroPanel h1,
-.heroPanel p {
+  max-width: min(40rem, 100%);
   color: var(--color-white);
 }
 
-.heroText {
-  max-width: 42rem;
-  font-size: clamp(1rem, 0.35vw + 0.95rem, 1.2rem);
-  color: rgba(255, 255, 255, 0.78) !important;
-}
-
-.eyebrow {
+.heroEyebrow,
+.sectionEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
   font-family: var(--font-heading), sans-serif;
-  font-size: clamp(0.78rem, 0.2vw + 0.74rem, 0.9rem);
+  font-size: var(--font-size-sm);
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-accent);
+}
+
+.heroPanel h1,
+.sectionHeading h2,
+.audienceContent h2,
+.consultationContent h2 {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.heroPanel h1 {
+  font-size: clamp(2.75rem, 4vw + 1rem, 5.1rem);
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.heroText {
+  max-width: 32rem;
+  margin: 0;
+  font-size: clamp(1rem, 0.3vw + 0.95rem, 1.25rem);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .heroActions {
@@ -77,225 +90,439 @@
   gap: var(--space-md);
 }
 
-.heroAside {
+.benefitsStrip {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: var(--space-md);
-  align-self: center;
-  padding: clamp(1.25rem, 2vw, 1.75rem);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: calc(-1 * var(--space-md));
+  margin-bottom: calc(-1 * var(--space-xl));
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
-  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
 }
 
-.heroStat {
+.benefitItem {
   display: grid;
-  gap: var(--space-xs);
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.heroStat:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.heroStatLabel {
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
-}
-
-.heroStat strong {
-  font-family: var(--font-heading), sans-serif;
-  font-size: clamp(1.2rem, 0.4vw + 1.05rem, 1.55rem);
-  line-height: 1.1;
-  text-transform: uppercase;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-md);
+  align-items: start;
+  padding: var(--space-lg);
+  background: rgba(12, 14, 16, 0.78);
   color: var(--color-white);
 }
 
-.section {
-  padding-top: var(--space-3xl);
+.benefitIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-accent);
 }
 
-.sectionHeader {
-  display: grid;
-  gap: var(--space-sm);
-  max-width: 48rem;
+.benefitCopy {
+  min-width: 0;
+}
+
+.benefitCopy h2 {
+  margin: 0 0 var(--space-2xs);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+}
+
+.benefitCopy p,
+.categoryBody p,
+.audienceContent p,
+.consultationContent p {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--color-muted);
+}
+
+.benefitCopy p {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: var(--font-size-sm);
+}
+
+.section {
+  padding: calc(var(--space-4xl) + var(--space-lg)) 0 0;
+}
+
+.sectionLast {
+  padding-bottom: var(--space-4xl);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.sectionHeading h2,
+.audienceContent h2,
+.consultationContent h2 {
+  font-size: clamp(2rem, 1.2vw + 1.3rem, 3rem);
+  line-height: 1;
+}
+
+.sectionLink {
+  flex-shrink: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  transition: color var(--transition-fast);
+}
+
+.sectionLink:hover,
+.categoryLink:hover {
+  color: var(--color-accent-hover);
 }
 
 .categoryGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-lg);
-  margin-top: var(--space-xl);
+}
+
+.categoryCard,
+.audienceCard,
+.brandCard,
+.consultation {
+  min-width: 0;
+  border: 1px solid rgba(17, 19, 21, 0.08);
+  border-radius: calc(var(--radius-lg) + 0.25rem);
+  box-shadow: var(--shadow-sm);
 }
 
 .categoryCard {
   display: grid;
-  gap: var(--space-md);
-  min-height: 16rem;
-  padding: clamp(1.25rem, 2vw, 2rem);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 250, 0.96));
-  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f8f7 100%);
   transition:
     transform var(--transition-base),
-    border-color var(--transition-base),
-    box-shadow var(--transition-base);
+    box-shadow var(--transition-base),
+    border-color var(--transition-base);
 }
 
 .categoryCard:hover {
   transform: translateY(-4px);
-  border-color: rgba(249, 115, 22, 0.45);
+  border-color: rgba(249, 115, 22, 0.22);
   box-shadow: var(--shadow-md);
 }
 
-.categoryCard h3 {
-  color: var(--color-dark);
+.categoryImageWrap {
+  position: relative;
+  aspect-ratio: 16 / 11;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f4f4f4 0%, #ececec 100%);
 }
 
-.categoryIndex {
+.categoryImage {
+  object-fit: cover;
+  transition: transform 280ms ease;
+}
+
+.categoryCard:hover .categoryImage {
+  transform: scale(1.03);
+}
+
+.categoryBody {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+}
+
+.categoryBody h3 {
+  margin: 0;
+  font-size: clamp(1.4rem, 0.5vw + 1.15rem, 1.8rem);
+  line-height: 1.05;
+}
+
+.categoryLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
   font-family: var(--font-heading), sans-serif;
   font-size: var(--font-size-sm);
-  letter-spacing: 0.2em;
-  color: var(--color-muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
 }
 
-.wholesalePanel {
+.productsGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: var(--space-xl);
-  align-items: end;
-  padding: clamp(1.5rem, 4vw, 3rem);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(17, 19, 21, 0.98), rgba(27, 31, 36, 0.94));
-  box-shadow: var(--shadow-md);
-}
-
-.wholesalePanel h2,
-.wholesalePanel p {
-  color: var(--color-white);
-}
-
-.wholesaleHeading,
-.wholesaleCopy {
-  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.75rem), 1fr));
   gap: var(--space-lg);
+  align-items: stretch;
 }
 
-.benefitsSection {
-  padding-bottom: var(--space-3xl);
-}
-
-.benefitGrid {
+.audienceGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-lg);
-  margin-top: var(--space-xl);
 }
 
-.benefitCard {
-  display: flex;
+.audienceCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(16rem, 0.95fr);
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(249, 115, 22, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
+    #ffffff;
+}
+
+.audienceCardDark {
+  grid-template-columns: 1fr;
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 14rem),
+    linear-gradient(180deg, #111315 0%, #1c2025 100%);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.audienceContent {
+  display: grid;
+  align-content: center;
   gap: var(--space-md);
-  align-items: flex-start;
-  padding: clamp(1.25rem, 2vw, 2rem);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  min-width: 0;
+  padding: clamp(var(--space-xl), 3vw, var(--space-2xl));
 }
 
-.benefitMarker {
-  flex: 0 0 0.85rem;
-  height: 0.85rem;
-  margin-top: 0.35rem;
-  border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 6px rgba(249, 115, 22, 0.14);
+.audienceCardDark .audienceContent h2,
+.audienceCardDark .audienceContent p {
+  color: var(--color-white);
 }
 
-@media (max-width: 1279px) {
-  .heroLayout {
-    grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.46fr);
+.audienceCardDark .audienceContent p:last-of-type {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.audienceImageWrap {
+  position: relative;
+  min-height: 100%;
+  background: linear-gradient(180deg, #fcfcfb 0%, #eeeeea 100%);
+}
+
+.audienceImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+.lightOutline {
+  border-color: rgba(17, 19, 21, 0.18);
+  background: transparent;
+  color: var(--color-dark);
+}
+
+.lightOutline:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.brandStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.brandCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  padding: var(--space-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 246, 244, 1) 100%);
+}
+
+.brandLogo {
+  width: 100%;
+  height: auto;
+  max-width: 11rem;
+  object-fit: contain;
+}
+
+.consultation {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.85fr);
+  overflow: hidden;
+  background:
+    linear-gradient(115deg, rgba(249, 115, 22, 0.22) 0%, rgba(249, 115, 22, 0.02) 32%, rgba(17, 19, 21, 0) 34%),
+    linear-gradient(180deg, #111315 0%, #191d22 100%);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.consultationContent {
+  display: grid;
+  align-content: center;
+  gap: var(--space-md);
+  min-width: 0;
+  padding: clamp(var(--space-xl), 3vw, var(--space-2xl));
+  color: var(--color-white);
+}
+
+.consultationContent p:last-of-type {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.consultationImageWrap {
+  position: relative;
+  min-height: 21rem;
+}
+
+.consultationImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (max-width: 1199px) {
+  .benefitsStrip,
+  .categoryGrid,
+  .audienceGrid,
+  .brandStrip {
+    gap: var(--space-md);
   }
 
-  .categoryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .productsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.5rem), 1fr));
   }
 }
 
 @media (max-width: 1023px) {
   .hero {
-    padding-top: var(--space-lg);
+    min-height: auto;
   }
 
-  .heroLayout,
-  .wholesalePanel {
-    grid-template-columns: 1fr;
+  .heroContent {
+    min-height: 0;
+    padding: calc(var(--space-4xl) + var(--space-sm)) 0 var(--space-2xl);
+  }
+
+  .benefitsStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+    margin-bottom: calc(-1 * var(--space-lg));
+  }
+
+  .categoryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audienceGrid,
+  .consultation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .audienceCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .audienceImageWrap {
+    min-height: 18rem;
+  }
+
+  .brandStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  .sectionHeading {
+    align-items: start;
+    flex-direction: column;
   }
 
   .heroPanel {
-    min-height: 30rem;
-    padding: var(--space-2xl) 0 var(--space-lg);
-  }
-
-  .heroAside {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 34rem;
   }
 }
 
 @media (max-width: 767px) {
-  .page {
-    padding-bottom: var(--space-3xl);
+  .heroOverlay {
+    background:
+      linear-gradient(180deg, rgba(8, 10, 12, 0.76) 0%, rgba(8, 10, 12, 0.72) 42%, rgba(8, 10, 12, 0.84) 100%),
+      linear-gradient(90deg, rgba(8, 10, 12, 0.58) 0%, rgba(8, 10, 12, 0.12) 100%);
   }
 
   .heroPanel {
-    min-height: 24rem;
     gap: var(--space-md);
   }
 
+  .heroPanel h1 {
+    max-width: 14ch;
+  }
+
   .heroActions {
-    gap: var(--space-sm);
+    flex-direction: column;
   }
 
-  .heroAside {
+  .benefitsStrip {
     grid-template-columns: 1fr;
-  }
-
-  .categoryGrid,
-  .benefitGrid {
-    grid-template-columns: 1fr;
+    margin-bottom: calc(-1 * var(--space-md));
   }
 
   .section {
-    padding-top: var(--space-2xl);
+    padding-top: calc(var(--space-3xl) + var(--space-xl));
+  }
+
+  .categoryGrid,
+  .brandStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .productsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .consultationImageWrap {
+    min-height: 16rem;
   }
 }
 
 @media (max-width: 479px) {
-  .hero {
-    padding-top: var(--space-md);
+  .heroContent {
+    padding-top: calc(var(--space-3xl) + var(--space-xl));
   }
 
   .heroPanel {
-    min-height: 0;
-    padding: var(--space-xl) 0 var(--space-md);
+    max-width: 100%;
   }
 
-  .heroActions {
-    display: grid;
+  .benefitItem,
+  .categoryBody,
+  .audienceContent,
+  .consultationContent,
+  .brandCard {
+    padding: var(--space-lg);
+  }
+
+  .benefitItem {
     grid-template-columns: 1fr;
   }
 
-  .sectionHeader {
-    gap: var(--space-xs);
+  .sectionHeading h2,
+  .audienceContent h2,
+  .consultationContent h2 {
+    line-height: 1.05;
   }
 
-  .categoryCard,
-  .benefitCard,
-  .wholesalePanel {
-    padding: var(--space-lg);
+  .sectionLast {
+    padding-bottom: var(--space-3xl);
   }
 }

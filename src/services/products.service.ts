@@ -46,6 +46,16 @@ const productSelect = `
   product_variants(*)
 `;
 
+function sortProductImages<T extends { sort_order: number; created_at: string }>(images: T[]) {
+  return [...images].sort((left, right) => {
+    if (left.sort_order !== right.sort_order) {
+      return left.sort_order - right.sort_order;
+    }
+
+    return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+  });
+}
+
 const getActiveProductsDataset = cache(async (): Promise<ProductCardData[]> => {
   const { data, error } = await supabase
     .from("products")
@@ -65,6 +75,7 @@ const getActiveProductsDataset = cache(async (): Promise<ProductCardData[]> => {
 function normalizeProductRows(data: ProductCardData[] | null | undefined) {
   return (data ?? []).map((product) => ({
     ...product,
+    product_images: sortProductImages(product.product_images ?? []),
     product_variants: product.product_variants.filter((variant) => variant.is_active),
   }));
 }
@@ -394,6 +405,7 @@ export const getProductBySlug = cache(
 
     return {
       ...product,
+      product_images: sortProductImages(product.product_images ?? []),
       product_variants: product.product_variants.filter((variant) => variant.is_active),
     };
   }
