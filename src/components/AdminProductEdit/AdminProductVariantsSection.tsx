@@ -443,6 +443,65 @@ export function AdminProductVariantsSection({
     }
   }
 
+  async function handleToggleVariant(variant: VariantRecord) {
+    const shouldActivate = !variant.is_active;
+    const confirmationText = shouldActivate
+      ? "Активувати цей варіант товару?"
+      : "Приховати цей варіант товару?";
+
+    if (!window.confirm(confirmationText)) {
+      return;
+    }
+
+    setIsBusy(true);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(`/api/admin/variants/${variant.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productId,
+          productSlug,
+          sku: variant.sku,
+          size: variant.size,
+          color: variant.color,
+          retail_price: variant.retail_price,
+          old_price: variant.old_price,
+          wholesale_price: variant.wholesale_price,
+          stock_quantity: variant.stock_quantity,
+          is_active: shouldActivate,
+        }),
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Не вдалося змінити статус варіанта.");
+      }
+
+      setFeedback({
+        type: "success",
+        message: shouldActivate
+          ? "Варіант успішно активовано"
+          : "Варіант успішно приховано",
+      });
+      router.refresh();
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Не вдалося змінити статус варіанта.",
+      });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function handleAdd() {
     const nextErrors = validateValues(newValues);
     setNewErrors(nextErrors);
@@ -589,7 +648,10 @@ export function AdminProductVariantsSection({
                   const stockTone = getStockTone(variant.stock_quantity);
 
                   return (
-                    <tr key={variant.id}>
+                    <tr
+                      key={variant.id}
+                      className={!variant.is_active ? styles.variantRowMuted : undefined}
+                    >
                       <td>{variant.sku || "—"}</td>
                       <td>{variant.size || "—"}</td>
                       <td>{variant.color || "—"}</td>
@@ -620,7 +682,7 @@ export function AdminProductVariantsSection({
                               : styles.statusBadgeInactive
                           }`}
                         >
-                          {variant.is_active ? "Активний" : "Неактивний"}
+                          {variant.is_active ? "Активний" : "Прихований"}
                         </span>
                       </td>
                       <td>
@@ -633,6 +695,15 @@ export function AdminProductVariantsSection({
                             disabled={isBusy}
                           >
                             Редагувати
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={styles.secondaryButton}
+                            onClick={() => handleToggleVariant(variant)}
+                            disabled={isBusy}
+                          >
+                            {variant.is_active ? "Приховати" : "Активувати"}
                           </Button>
                           <Button
                             type="button"
@@ -657,7 +728,12 @@ export function AdminProductVariantsSection({
               const stockTone = getStockTone(variant.stock_quantity);
 
               return (
-                <article key={variant.id} className={styles.variantCard}>
+                <article
+                  key={variant.id}
+                  className={`${styles.variantCard} ${
+                    !variant.is_active ? styles.variantRowMuted : ""
+                  }`}
+                >
                   <div className={styles.cardHeader}>
                     <div>
                       <h3>{variant.sku || "Варіант без SKU"}</h3>
@@ -672,7 +748,7 @@ export function AdminProductVariantsSection({
                           : styles.statusBadgeInactive
                       }`}
                     >
-                      {variant.is_active ? "Активний" : "Неактивний"}
+                      {variant.is_active ? "Активний" : "Прихований"}
                     </span>
                   </div>
 
@@ -707,6 +783,15 @@ export function AdminProductVariantsSection({
                       disabled={isBusy}
                     >
                       Редагувати
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={styles.secondaryButton}
+                      onClick={() => handleToggleVariant(variant)}
+                      disabled={isBusy}
+                    >
+                      {variant.is_active ? "Приховати" : "Активувати"}
                     </Button>
                     <Button
                       type="button"

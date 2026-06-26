@@ -91,6 +91,7 @@ export function ProductDetails({ product }: ProductDetailsProps) {
             imageUrl={primaryImage?.image_url ?? null}
             categoryName={product.category?.name ?? null}
             brandName={product.brand?.name ?? null}
+            productStatus={product.status}
             variants={product.product_variants}
           />
         </div>

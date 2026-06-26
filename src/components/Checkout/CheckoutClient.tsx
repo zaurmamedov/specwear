@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
@@ -15,7 +16,6 @@ import {
 
 import { Button } from "@/components/Button";
 import { isSupabaseStorageUrl } from "@/lib/images";
-import { supabase } from "@/lib/supabase/client";
 import { useCartStore } from "@/stores/cart.store";
 
 import styles from "./Checkout.module.css";
@@ -65,6 +65,28 @@ type NovaPoshtaWarehouse = {
   type: string;
 };
 
+type CartAvailabilityResult = {
+  productId: string;
+  variantId: string | null;
+  isAvailable: boolean;
+  message: string | null;
+};
+
+type CheckoutProfileData = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  customerType: CustomerType;
+  deliveryService: DeliveryService;
+  deliveryMethod: DeliveryMethod;
+  deliveryCity: string;
+  deliveryCityRef: string | null;
+  deliveryWarehouse: string;
+  deliveryWarehouseRef: string | null;
+  deliveryAddress: string;
+};
+
 const initialFormState: CheckoutFormState = {
   firstName: "",
   lastName: "",
@@ -80,6 +102,28 @@ const initialFormState: CheckoutFormState = {
   deliveryAddress: "",
   comment: "",
 };
+
+function createInitialFormState(profile?: CheckoutProfileData | null): CheckoutFormState {
+  if (!profile) {
+    return initialFormState;
+  }
+
+  return {
+    ...initialFormState,
+    firstName: profile.firstName || "",
+    lastName: profile.lastName || "",
+    phone: profile.phone || "+380",
+    email: profile.email || "",
+    customerType: profile.customerType || "retail",
+    deliveryService: profile.deliveryService || "nova_poshta",
+    deliveryMethod: profile.deliveryMethod || "branch",
+    deliveryCity: profile.deliveryCity || "",
+    deliveryCityRef: profile.deliveryCityRef ?? null,
+    deliveryWarehouse: profile.deliveryWarehouse || "",
+    deliveryWarehouseRef: profile.deliveryWarehouseRef ?? null,
+    deliveryAddress: profile.deliveryAddress || "",
+  };
+}
 
 const deliveryMethodOptions: Record<
   DeliveryService,
@@ -125,14 +169,26 @@ function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-export function CheckoutClient() {
+type CheckoutClientProps = {
+  initialProfile?: CheckoutProfileData | null;
+  isAuthenticated?: boolean;
+};
+
+export function CheckoutClient({
+  initialProfile = null,
+  isAuthenticated = false,
+}: CheckoutClientProps) {
   const router = useRouter();
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
 
-  const [form, setForm] = useState<CheckoutFormState>(initialFormState);
-  const [cityQuery, setCityQuery] = useState("");
-  const [warehouseQuery, setWarehouseQuery] = useState("");
+  const [form, setForm] = useState<CheckoutFormState>(() =>
+    createInitialFormState(initialProfile)
+  );
+  const [cityQuery, setCityQuery] = useState(initialProfile?.deliveryCity ?? "");
+  const [warehouseQuery, setWarehouseQuery] = useState(
+    initialProfile?.deliveryWarehouse ?? ""
+  );
   const [citySuggestions, setCitySuggestions] = useState<NovaPoshtaCity[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<NovaPoshtaWarehouse[]>([]);
   const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false);
@@ -143,6 +199,7 @@ export function CheckoutClient() {
   const [warehouseSearchError, setWarehouseSearchError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cartAvailability, setCartAvailability] = useState<CartAvailabilityResult[]>([]);
   const [touched, setTouched] = useState<CheckoutTouchedState>({
     firstName: false,
     lastName: false,
@@ -167,6 +224,15 @@ export function CheckoutClient() {
   const deliveryPrice = 0;
   const total = subtotal + deliveryPrice;
   const itemCount = items.reduce((count, item) => count + item.quantity, 0);
+  const effectiveCartAvailability = items.length === 0 ? [] : cartAvailability;
+  const hasUnavailableCartItems = effectiveCartAvailability.some(
+    (item) => !item.isAvailable
+  );
+  const cartAvailabilityMessage =
+    effectiveCartAvailability.find((item) => !item.isAvailable)?.message ??
+    (hasUnavailableCartItems
+      ? "Деякі товари більше недоступні для замовлення."
+      : null);
 
   const currentMethodOptions = deliveryMethodOptions[form.deliveryService];
   const isNovaPoshta = form.deliveryService === "nova_poshta";
@@ -181,6 +247,49 @@ export function CheckoutClient() {
     form.deliveryMethod === "locker"
       ? "Введіть номер або адресу поштомату"
       : "Введіть номер або адресу відділення";
+
+  useEffect(() => {
+    if (items.length === 0) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/cart/availability", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            items: items.map((item) => ({
+              productId: item.productId,
+              variantId: item.variantId ?? null,
+              quantity: item.quantity,
+            })),
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { items?: CartAvailabilityResult[] };
+
+        if (!controller.signal.aborted) {
+          setCartAvailability(Array.isArray(payload.items) ? payload.items : []);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setCartAvailability([]);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [items]);
 
   useEffect(() => {
     if (!isNovaPoshta) {
@@ -337,7 +446,11 @@ export function CheckoutClient() {
   };
 
   const isFormValid = Object.values(validationErrors).every((value) => value === null);
-  const canSubmit = items.length > 0 && isFormValid && !isSubmitting;
+  const canSubmit =
+    items.length > 0 &&
+    isFormValid &&
+    !isSubmitting &&
+    !hasUnavailableCartItems;
 
   function updateField<Key extends keyof CheckoutFormState>(
     key: Key,
@@ -535,96 +648,45 @@ export function CheckoutClient() {
     setSubmitError(null);
 
     try {
-      const orderId = crypto.randomUUID();
       const orderPayload = {
-        id: orderId,
-        first_name: form.firstName.trim(),
-        last_name: form.lastName.trim(),
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim() || null,
-        customer_type: form.customerType,
-        delivery_service: form.deliveryService,
-        delivery_method: form.deliveryMethod,
-        delivery_city: form.deliveryCity.trim(),
-        delivery_city_ref: form.deliveryCityRef,
-        delivery_warehouse: needsWarehouseSelection ? form.deliveryWarehouse.trim() || null : null,
-        delivery_warehouse_ref: form.deliveryWarehouseRef,
-        delivery_address: isCourier ? form.deliveryAddress.trim() || null : null,
+        email: form.email.trim(),
+        customerType: form.customerType,
+        deliveryService: form.deliveryService,
+        deliveryMethod: form.deliveryMethod,
+        deliveryCity: form.deliveryCity.trim(),
+        deliveryCityRef: form.deliveryCityRef,
+        deliveryWarehouse: needsWarehouseSelection ? form.deliveryWarehouse.trim() || null : null,
+        deliveryWarehouseRef: form.deliveryWarehouseRef,
+        deliveryAddress: isCourier ? form.deliveryAddress.trim() || null : null,
         comment: form.comment.trim() || null,
         subtotal,
-        delivery_price: deliveryPrice,
+        deliveryPrice,
         total,
-        status: "new",
+        items,
       };
 
-      const { error: orderError } = await supabase
-        .from("orders")
-        .insert(orderPayload);
+      const response = await fetch("/api/checkout/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(orderPayload),
+      });
 
-      if (orderError) {
-        throw new Error(orderError.message ?? "Не вдалося створити замовлення.");
-      }
+      const payload = (await response.json()) as {
+        error?: string;
+        orderId?: string;
+      };
 
-      const orderItemsPayload = items
-        .filter((item) => item.price !== null)
-        .map((item) => ({
-          order_id: orderId,
-          product_id: item.productId,
-          variant_id: item.variantId ?? null,
-          product_name: item.name,
-          product_slug: item.slug,
-          image_url: item.imageUrl,
-          sku: item.sku ?? null,
-          size: item.size ?? null,
-          color: item.color ?? null,
-          brand_name: item.brandName ?? null,
-          category_name: item.categoryName ?? null,
-          price: item.price ?? 0,
-          quantity: item.quantity,
-          total: (item.price ?? 0) * item.quantity,
-        }));
-
-      const { error: itemsError } = await supabase
-        .from("order_items")
-        .insert(orderItemsPayload);
-
-      if (itemsError) {
-        throw new Error(itemsError.message);
-      }
-
-      try {
-        await fetch("/api/checkout/telegram", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            orderId,
-            firstName: form.firstName.trim(),
-            lastName: form.lastName.trim(),
-            phone: form.phone.trim(),
-            email: form.email.trim() || null,
-            deliveryService: form.deliveryService,
-            deliveryMethod: form.deliveryMethod,
-            deliveryCity: form.deliveryCity.trim(),
-            deliveryWarehouse: needsWarehouseSelection
-              ? form.deliveryWarehouse.trim() || null
-              : null,
-            deliveryAddress: isCourier ? form.deliveryAddress.trim() || null : null,
-            total,
-            items: orderItemsPayload.map((item) => ({
-              productName: item.product_name,
-              quantity: item.quantity,
-              price: item.price,
-            })),
-          }),
-        });
-      } catch (telegramError) {
-        console.error("Telegram notification request failed:", telegramError);
+      if (!response.ok || !payload.orderId) {
+        throw new Error(payload.error ?? "Не вдалося створити замовлення.");
       }
 
       clearCart();
-      router.replace(`/checkout/success?order=${orderId}`);
+      router.replace(`/checkout/success?order=${payload.orderId}`);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -638,6 +700,15 @@ export function CheckoutClient() {
   return (
     <div className={styles.layout}>
       <form className={styles.form} onSubmit={handleSubmit}>
+        {!isAuthenticated ? (
+          <section className={`${styles.section} ${styles.checkoutNote}`}>
+            <p className={styles.helper}>
+              <Link href="/login?redirectTo=/checkout">Увійдіть</Link>, щоб зберегти
+              дані та бачити історію замовлень.
+            </p>
+          </section>
+        ) : null}
+
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <p className={styles.eyebrow}>Контактні дані</p>
@@ -997,6 +1068,9 @@ export function CheckoutClient() {
         </section>
 
         {submitError ? <p className={styles.error}>{submitError}</p> : null}
+        {cartAvailabilityMessage ? (
+          <p className={styles.error}>{cartAvailabilityMessage}</p>
+        ) : null}
 
         <div className={styles.submitRow}>
           <Button type="submit" size="large" disabled={!canSubmit}>
@@ -1009,6 +1083,11 @@ export function CheckoutClient() {
           ) : null}
           {items.length === 0 ? (
             <p className={styles.helper}>Кошик порожній. Додайте товари перед оформленням.</p>
+          ) : null}
+          {hasUnavailableCartItems ? (
+            <p className={styles.helper}>
+              Оновіть кошик: частина товарів більше недоступна для замовлення.
+            </p>
           ) : null}
         </div>
       </form>

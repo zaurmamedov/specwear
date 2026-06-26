@@ -8,6 +8,7 @@ import {
 } from "@/components/AdminOrders";
 import styles from "@/components/AdminOrders/AdminOrders.module.css";
 import { isSupabaseStorageUrl, isValidImageUrl } from "@/lib/images";
+import { getDeliveryMethodLabel, getDeliveryServiceLabel } from "@/lib/order-labels";
 import { getOrderById } from "@/services/orders.service";
 
 export const dynamic = "force-dynamic";
@@ -28,42 +29,6 @@ function formatDate(value: string) {
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("uk-UA").format(value);
-}
-
-function getDeliveryLabel(service: string) {
-  if (service === "nova_poshta") {
-    return "Нова Пошта";
-  }
-
-  if (service === "ukrposhta") {
-    return "Укрпошта";
-  }
-
-  if (service === "pickup") {
-    return "Самовивіз";
-  }
-
-  return service;
-}
-
-function getMethodLabel(method: string) {
-  if (method === "branch") {
-    return "Відділення";
-  }
-
-  if (method === "locker") {
-    return "Поштомат";
-  }
-
-  if (method === "courier") {
-    return "Кур'єр";
-  }
-
-  if (method === "pickup") {
-    return "Самовивіз";
-  }
-
-  return method;
 }
 
 export default async function OrderDetailsPage({ params }: OrderDetailsPageProps) {
@@ -132,11 +97,11 @@ export default async function OrderDetailsPage({ params }: OrderDetailsPageProps
             <div className={styles.detailList}>
               <div className={styles.detailListRow}>
                 <span className={styles.detailLabel}>Сервіс</span>
-                <span>{getDeliveryLabel(order.delivery_service)}</span>
+                <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
               </div>
               <div className={styles.detailListRow}>
                 <span className={styles.detailLabel}>Спосіб</span>
-                <span>{getMethodLabel(order.delivery_method)}</span>
+                <span>{getDeliveryMethodLabel(order.delivery_method)}</span>
               </div>
               <div className={styles.detailListRow}>
                 <span className={styles.detailLabel}>Місто</span>

@@ -7,6 +7,10 @@ import { useState } from "react";
 import { Button } from "@/components/Button";
 import { AdminProductImagesSection } from "@/components/AdminProductEdit/AdminProductImagesSection";
 import { AdminProductVariantsSection } from "@/components/AdminProductEdit/AdminProductVariantsSection";
+import {
+  getProductStatusDescription,
+  type ProductStatus,
+} from "@/lib/product-status";
 import type {
   AdminEditableProduct,
   AdminProductUpdateInput,
@@ -51,7 +55,7 @@ export function AdminProductEditForm({
   const [mainImageUrl, setMainImageUrl] = useState<string | null>(
     product.main_image_url ?? null
   );
-  const [isActive, setIsActive] = useState(product.is_active);
+  const [status, setStatus] = useState<ProductStatus>(product.status);
   const [isFeatured, setIsFeatured] = useState(product.is_featured);
   const [isNew, setIsNew] = useState(product.is_new);
   const [isSale, setIsSale] = useState(product.is_sale);
@@ -109,7 +113,8 @@ export function AdminProductEditForm({
       category_id: categoryId,
       brand_id: brandId || null,
       main_image_url: mainImageUrl ? toOptionalString(mainImageUrl) : null,
-      is_active: isActive,
+      status,
+      is_active: status !== "archived",
       is_featured: isFeatured,
       is_new: isNew,
       is_sale: isSale,
@@ -244,13 +249,19 @@ export function AdminProductEditForm({
           </div>
 
           <div className={styles.toggles}>
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(event) => setIsActive(event.target.checked)}
-              />
-              <span>Активний</span>
+            <label className={`${styles.field} ${styles.toggleField}`}>
+              <span>Статус товару</span>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value as ProductStatus)}
+              >
+                <option value="active">Активний</option>
+                <option value="unavailable">Немає в наявності</option>
+                <option value="archived">Архівний</option>
+              </select>
+              <small className={styles.helperText}>
+                {getProductStatusDescription(status)}
+              </small>
             </label>
             <label className={styles.toggle}>
               <input

@@ -169,6 +169,15 @@
   gap: 0.2rem;
 }
 
+.itemWarning {
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-md);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
 .itemDetails p {
   font-size: var(--font-size-sm);
 }
@@ -216,6 +225,12 @@
 .quantityButton:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.summaryWarning {
+  color: #b91c1c;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
 }
 
 .quantityValue {

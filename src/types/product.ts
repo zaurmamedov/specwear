@@ -1,4 +1,5 @@
 import type { Category } from "@/types/category";
+import type { ProductStatus } from "@/lib/product-status";
 
 export interface Brand {
   id: string;
@@ -44,6 +45,7 @@ export interface Product {
   short_description: string | null;
   description: string | null;
   main_image_url: string | null;
+  status: ProductStatus;
   is_active: boolean;
   is_featured: boolean;
   is_new: boolean;

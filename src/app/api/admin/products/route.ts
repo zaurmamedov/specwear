@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { createAdminProduct } from "@/services/admin-products.service";
 import type { AdminProductCreateInput } from "@/types/admin-product";
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
+    const status = normalizeText(body.status) as ProductStatus;
     const retailPrice = normalizeInteger(body.variant?.retail_price, Number.NaN);
     const stockQuantity = normalizeInteger(body.variant?.stock_quantity, Number.NaN);
 
@@ -69,6 +71,13 @@ export async function POST(request: Request) {
     if (!categoryId) {
       return NextResponse.json(
         { error: "Категорія товару є обов’язковою." },
+        { status: 400 }
+      );
+    }
+
+    if (!PRODUCT_STATUSES.includes(status)) {
+      return NextResponse.json(
+        { error: "Вкажіть коректний статус товару." },
         { status: 400 }
       );
     }
@@ -96,7 +105,8 @@ export async function POST(request: Request) {
       category_id: categoryId,
       brand_id: normalizeOptionalText(body.brand_id),
       main_image_url: normalizeOptionalText(body.main_image_url),
-      is_active: Boolean(body.is_active),
+      status,
+      is_active: status !== "archived",
       is_featured: Boolean(body.is_featured),
       is_new: Boolean(body.is_new),
       is_sale: Boolean(body.is_sale),

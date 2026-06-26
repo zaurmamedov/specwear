@@ -10,13 +10,14 @@ import styles from "./Cart.module.css";
 
 type CartItemProps = {
   item: CartItemType;
+  warningMessage?: string | null;
 };
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("uk-UA").format(price);
 }
 
-export function CartItem({ item }: CartItemProps) {
+export function CartItem({ item, warningMessage = null }: CartItemProps) {
   const removeItem = useCartStore((state) => state.removeItem);
   const setQuantity = useCartStore((state) => state.setQuantity);
 
@@ -25,7 +26,7 @@ export function CartItem({ item }: CartItemProps) {
     typeof item.stockQuantity === "number" && item.stockQuantity > 0
       ? item.stockQuantity
       : item.quantity;
-  const canIncrease = item.quantity < maxQuantity;
+  const canIncrease = !warningMessage && item.quantity < maxQuantity;
 
   return (
     <article className={styles.item}>
@@ -75,6 +76,10 @@ export function CartItem({ item }: CartItemProps) {
           <Link href={`/product/${item.slug}`} className={styles.itemTitle}>
             {item.name}
           </Link>
+
+          {warningMessage ? (
+            <p className={styles.itemWarning}>{warningMessage}</p>
+          ) : null}
 
           <div className={styles.itemDetails}>
             {item.size ? <p>Розмір: {item.size}</p> : null}

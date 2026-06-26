@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { updateAdminProduct } from "@/services/admin-products.service";
 import type { AdminProductUpdateInput } from "@/types/admin-product";
@@ -54,6 +55,7 @@ export async function PATCH(
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
+    const status = normalizeText(body.status) as ProductStatus;
 
     if (!name) {
       return NextResponse.json(
@@ -76,6 +78,13 @@ export async function PATCH(
       );
     }
 
+    if (!PRODUCT_STATUSES.includes(status)) {
+      return NextResponse.json(
+        { error: "Вкажіть коректний статус товару." },
+        { status: 400 }
+      );
+    }
+
     const payload: AdminProductUpdateInput = {
       name,
       slug,
@@ -85,7 +94,8 @@ export async function PATCH(
       category_id: categoryId,
       brand_id: normalizeOptionalText(body.brand_id),
       main_image_url: normalizeOptionalText(body.main_image_url),
-      is_active: Boolean(body.is_active),
+      status,
+      is_active: status !== "archived",
       is_featured: Boolean(body.is_featured),
       is_new: Boolean(body.is_new),
       is_sale: Boolean(body.is_sale),

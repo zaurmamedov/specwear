@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
@@ -8,28 +9,77 @@ import { useWishlistStore } from "@/stores/wishlist.store";
 import styles from "./Header.module.css";
 
 type HeaderActionsProps = {
+  accountHref: string;
   wishlistHref: string;
   cartHref: string;
+  isAccountActive: boolean;
   isWishlistActive: boolean;
   isCartActive: boolean;
   onLinkClick?: () => void;
 };
 
 export function HeaderActions({
+  accountHref,
   wishlistHref,
   cartHref,
+  isAccountActive,
   isWishlistActive,
   isCartActive,
   onLinkClick,
 }: HeaderActionsProps) {
   const cartItems = useCartStore((state) => state.items);
   const wishlistItems = useWishlistStore((state) => state.items);
+  const [resolvedAccountHref, setResolvedAccountHref] = useState(accountHref);
 
   const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
   const wishlistCount = wishlistItems.length;
 
+  useEffect(() => {
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        const payload = (await response.json()) as { authenticated?: boolean };
+
+        if (!isMounted) {
+          return;
+        }
+
+        setResolvedAccountHref(payload.authenticated ? "/account" : "/login");
+      } catch {
+        if (isMounted) {
+          setResolvedAccountHref(accountHref);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accountHref]);
+
   return (
     <nav aria-label="Службова навігація" className={styles.utilityNav}>
+      <Link
+        href={resolvedAccountHref}
+        className={`${styles.utilityLink} ${isAccountActive ? styles.utilityLinkActive : ""}`}
+        aria-label="Кабінет"
+        aria-current={isAccountActive ? "page" : undefined}
+        onClick={onLinkClick}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.utilityIcon}>
+          <path
+            d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.2 0-7 2.1-7 5v1h14v-1c0-2.9-2.8-5-7-5Z"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      </Link>
+
       <Link
         href={wishlistHref}
         className={`${styles.utilityLink} ${isWishlistActive ? styles.utilityLinkActive : ""}`}

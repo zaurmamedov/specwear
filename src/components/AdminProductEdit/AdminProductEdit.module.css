@@ -76,12 +76,24 @@
   grid-column: 1 / -1;
 }
 
+.toggleField {
+  min-width: min(100%, 20rem);
+}
+
 .field span {
   color: var(--color-dark);
   font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.helperText {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
   word-break: normal;
   overflow-wrap: break-word;
 }
@@ -183,13 +195,13 @@
   flex-wrap: wrap;
 }
 
-.secondaryButton {
+.secondaryButton.secondaryButton {
   border-color: var(--color-border);
-  background: transparent;
+  background: rgba(17, 19, 21, 0.03);
   color: var(--color-dark);
 }
 
-.secondaryButton:hover {
+.secondaryButton.secondaryButton:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: rgba(249, 115, 22, 0.06);
@@ -343,6 +355,10 @@
   overflow-wrap: break-word;
 }
 
+.variantRowMuted {
+  opacity: 0.72;
+}
+
 .variantTable th {
   font-size: var(--font-size-xs);
   font-weight: 700;
@@ -363,6 +379,11 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.variantRowMuted .stockBadge,
+.variantRowMuted .statusBadge {
+  opacity: 1;
 }
 
 .variantMeta {
@@ -415,13 +436,13 @@
   color: #b91c1c;
 }
 
-.dangerButton {
+.dangerButton.dangerButton {
   border-color: rgba(185, 28, 28, 0.24);
   background: rgba(185, 28, 28, 0.06);
   color: #b91c1c;
 }
 
-.dangerButton:hover {
+.dangerButton.dangerButton:hover {
   border-color: rgba(185, 28, 28, 0.42);
   background: rgba(185, 28, 28, 0.12);
   color: #991b1b;

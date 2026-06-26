@@ -26,6 +26,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  user_id?: string | null;
   first_name: string;
   last_name: string;
   phone: string;

@@ -108,8 +108,12 @@ export function Header() {
           />
 
           <HeaderActions
+            accountHref="/login"
             wishlistHref="/favourite"
             cartHref="/cart"
+            isAccountActive={
+              isActiveLink("/account") || isActiveLink("/login") || isActiveLink("/register")
+            }
             isWishlistActive={isActiveLink("/favourite")}
             isCartActive={isActiveLink("/cart")}
             onLinkClick={() => setIsSearchOpen(false)}

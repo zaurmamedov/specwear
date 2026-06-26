@@ -2,6 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { isSupabaseStorageUrl, isValidImageUrl } from "@/lib/images";
+import {
+  isProductPurchasableStatus,
+  isProductUnavailableStatus,
+} from "@/lib/product-status";
 import type { ProductCardData } from "@/types/product";
 
 import { ProductCardActions } from "./ProductCardActions";
@@ -43,6 +47,7 @@ function hasSinglePurchasableVariant(product: ProductCardData) {
   const activeVariants = getActiveVariants(product);
 
   return (
+    isProductPurchasableStatus(product.status) &&
     activeVariants.length === 1 &&
     activeVariants[0].retail_price !== null &&
     activeVariants[0].stock_quantity > 0
@@ -58,6 +63,10 @@ function canDirectAddToCart(product: ProductCardData) {
 }
 
 function hasPurchasableVariant(product: ProductCardData) {
+  if (!isProductPurchasableStatus(product.status)) {
+    return false;
+  }
+
   return getActiveVariants(product).some(
     (variant) => variant.retail_price !== null && variant.stock_quantity > 0
   );
@@ -89,6 +98,12 @@ export function ProductCard({ product }: ProductCardProps) {
   const productHasMultipleVariants = hasMultipleVariants(product);
   const canAddToCart = canDirectAddToCart(product);
   const productHasPurchasableVariant = hasPurchasableVariant(product);
+  const isTemporarilyUnavailable = isProductUnavailableStatus(product.status);
+  const statusText = isTemporarilyUnavailable
+    ? "Немає в наявності"
+    : productHasPurchasableVariant
+      ? "В наявності"
+      : "Немає в наявності";
 
   return (
     <article className={styles.card}>
@@ -162,12 +177,12 @@ export function ProductCard({ product }: ProductCardProps) {
             {sku ? <span className={styles.sku}>{sku}</span> : null}
             <span
               className={
-                productHasPurchasableVariant
+                productHasPurchasableVariant && !isTemporarilyUnavailable
                   ? styles.inStock
                   : styles.outOfStock
               }
             >
-              {productHasPurchasableVariant ? "В наявності" : "Немає в наявності"}
+              {statusText}
             </span>
           </div>
 

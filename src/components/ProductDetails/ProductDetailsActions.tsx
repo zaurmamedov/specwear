@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 
+import {
+  isProductPurchasableStatus,
+  type ProductStatus,
+} from "@/lib/product-status";
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
 import type { ProductVariant } from "@/types/product";
@@ -15,6 +19,7 @@ type ProductDetailsActionsProps = {
   imageUrl: string | null;
   categoryName: string | null;
   brandName: string | null;
+  productStatus: ProductStatus;
   variants: ProductVariant[];
 };
 
@@ -40,6 +45,7 @@ export function ProductDetailsActions({
   imageUrl,
   categoryName,
   brandName,
+  productStatus,
   variants,
 }: ProductDetailsActionsProps) {
   const cartItems = useCartStore((state) => state.items);
@@ -48,33 +54,48 @@ export function ProductDetailsActions({
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const wishlistItems = useWishlistStore((state) => state.items);
 
+  const visibleVariants = useMemo(() => [...variants], [variants]);
+  const isPurchasableProduct = isProductPurchasableStatus(productStatus);
+
   const activeVariants = useMemo(
     () => variants.filter((variant) => variant.is_active),
     [variants]
+  );
+
+  const selectableVariants = useMemo(
+    () =>
+      visibleVariants.filter(
+        (variant) =>
+          isPurchasableProduct &&
+          variant.is_active &&
+          variant.retail_price !== null &&
+          variant.stock_quantity > 0
+      ),
+    [isPurchasableProduct, visibleVariants]
   );
 
   const sizes = useMemo(
     () =>
       Array.from(
         new Set(
-          activeVariants
+          visibleVariants
             .map((variant) => variant.size?.trim())
             .filter((value): value is string => Boolean(value))
         )
       ),
-    [activeVariants]
+    [visibleVariants]
   );
 
   const colors = useMemo(
     () =>
       Array.from(
         new Set(
-          activeVariants
+          visibleVariants
             .map((variant) => variant.color?.trim())
             .filter((value): value is string => Boolean(value))
         )
       ),
-    [activeVariants]
+    [visibleVariants]
   );
 
   const [selectedSize, setSelectedSize] = useState<string | null>(
@@ -85,21 +106,18 @@ export function ProductDetailsActions({
   );
   const [quantity, setQuantity] = useState(1);
 
-  const availableSizesForColor = useMemo(
+  const selectableSizes = useMemo(
     () =>
       new Set(
-        activeVariants
-          .filter((variant) =>
-            selectedColor ? variant.color?.trim() === selectedColor : true
-          )
+        selectableVariants
           .map((variant) => variant.size?.trim())
           .filter((value): value is string => Boolean(value))
       ),
-    [activeVariants, selectedColor]
+    [selectableVariants]
   );
 
   const resolvedSize = useMemo(() => {
-    if (selectedSize && availableSizesForColor.has(selectedSize)) {
+    if (selectedSize) {
       return selectedSize;
     }
 
@@ -107,28 +125,24 @@ export function ProductDetailsActions({
       return sizes[0];
     }
 
-    if (selectedColor && availableSizesForColor.size === 1) {
-      return Array.from(availableSizesForColor)[0] ?? null;
-    }
-
     return null;
-  }, [availableSizesForColor, selectedColor, selectedSize, sizes]);
+  }, [selectedSize, sizes]);
 
-  const availableColorsForResolvedSize = useMemo(
+  const selectableColorsForSize = useMemo(
     () =>
       new Set(
-        activeVariants
+        selectableVariants
           .filter((variant) =>
             resolvedSize ? variant.size?.trim() === resolvedSize : true
           )
           .map((variant) => variant.color?.trim())
           .filter((value): value is string => Boolean(value))
       ),
-    [activeVariants, resolvedSize]
+    [resolvedSize, selectableVariants]
   );
 
   const resolvedColor = useMemo(() => {
-    if (selectedColor && availableColorsForResolvedSize.has(selectedColor)) {
+    if (selectedColor) {
       return selectedColor;
     }
 
@@ -136,78 +150,83 @@ export function ProductDetailsActions({
       return colors[0];
     }
 
-    if (resolvedSize && availableColorsForResolvedSize.size === 1) {
-      return Array.from(availableColorsForResolvedSize)[0] ?? null;
+    if (resolvedSize) {
+      const firstSelectableForSize = selectableVariants.find(
+        (variant) => variant.size?.trim() === resolvedSize
+      );
+
+      return firstSelectableForSize?.color?.trim() ?? null;
     }
 
     return null;
-  }, [availableColorsForResolvedSize, colors, resolvedSize, selectedColor]);
-
-  const matchingVariants = useMemo(
-    () =>
-      activeVariants.filter((variant) => {
-        const matchesSize = resolvedSize ? variant.size?.trim() === resolvedSize : true;
-        const matchesColor = resolvedColor ? variant.color?.trim() === resolvedColor : true;
-
-        return matchesSize && matchesColor;
-      }),
-    [activeVariants, resolvedColor, resolvedSize]
-  );
+  }, [colors, resolvedSize, selectableVariants, selectedColor]);
 
   const selectedVariant = useMemo(() => {
-    if (sizes.length > 0 && !resolvedSize) {
-      return null;
+    const matchesVariant = (variant: ProductVariant) => {
+      const matchesSize = resolvedSize ? variant.size?.trim() === resolvedSize : true;
+      const matchesColor = resolvedColor ? variant.color?.trim() === resolvedColor : true;
+      return matchesSize && matchesColor;
+    };
+
+    const exactVisibleVariant =
+      selectableVariants.find(matchesVariant) ??
+      visibleVariants.find(matchesVariant) ??
+      null;
+
+    if (resolvedSize && resolvedColor) {
+      return exactVisibleVariant;
     }
 
-    if (colors.length > 0 && !resolvedColor) {
-      return null;
+    if (resolvedSize) {
+      return (
+        selectableVariants.find((variant) => variant.size?.trim() === resolvedSize) ??
+        visibleVariants.find((variant) => variant.size?.trim() === resolvedSize) ??
+        null
+      );
     }
 
-    if (matchingVariants.length === 1) {
-      return matchingVariants[0];
-    }
-
-    if (matchingVariants.length > 1) {
-      return matchingVariants.find((variant) => variant.stock_quantity > 0) ?? matchingVariants[0];
+    if (resolvedColor) {
+      return (
+        selectableVariants.find((variant) => variant.color?.trim() === resolvedColor) ??
+        visibleVariants.find((variant) => variant.color?.trim() === resolvedColor) ??
+        null
+      );
     }
 
     if (sizes.length === 0 && colors.length === 0) {
-      return activeVariants[0] ?? null;
+      return selectableVariants[0] ?? visibleVariants[0] ?? null;
     }
 
     return null;
-  }, [
-    activeVariants,
-    colors.length,
-    matchingVariants,
-    resolvedColor,
-    resolvedSize,
-    sizes.length,
-  ]);
+  }, [colors.length, resolvedColor, resolvedSize, selectableVariants, sizes.length, visibleVariants]);
 
+  const isSelectedVariantSelectable =
+    isPurchasableProduct &&
+    selectedVariant !== null &&
+    selectedVariant.is_active &&
+    selectedVariant.retail_price !== null &&
+    selectedVariant.stock_quantity > 0;
   const maxQuantity = selectedVariant?.stock_quantity ?? 0;
   const currentQuantity =
     selectedVariant?.stock_quantity && selectedVariant.stock_quantity > 0
       ? Math.min(Math.max(quantity, 1), selectedVariant.stock_quantity)
       : 1;
+  const hasVisibleVariants = visibleVariants.length > 0;
   const hasActiveVariants = activeVariants.length > 0;
-  const hasAnyInStock = activeVariants.some((variant) => variant.stock_quantity > 0);
-  const needsSizeSelection = sizes.length > 0 && !resolvedSize;
-  const needsColorSelection = colors.length > 0 && !resolvedColor;
+  const hasAnyInStock = selectableVariants.length > 0;
+  const needsSizeSelection = sizes.length > 0 && !selectedVariant;
+  const needsColorSelection = colors.length > 0 && !selectedVariant;
   const needsFullSelection = needsSizeSelection || needsColorSelection;
-  const isCatalogUnavailable = !hasActiveVariants || !hasAnyInStock;
+  const isCatalogUnavailable = !isPurchasableProduct || !hasVisibleVariants || !hasAnyInStock;
   const isSelectedVariantOutOfStock =
     selectedVariant !== null &&
-    selectedVariant.retail_price !== null &&
-    selectedVariant.stock_quantity <= 0 &&
+    !isSelectedVariantSelectable &&
     !needsFullSelection;
   const canAddToCart =
-    selectedVariant !== null &&
-    selectedVariant.retail_price !== null &&
-    selectedVariant.stock_quantity > 0 &&
+    isSelectedVariantSelectable &&
     !needsFullSelection;
   const statusText = isCatalogUnavailable
-    ? "Товар тимчасово недоступний"
+    ? "Немає в наявності"
     : needsFullSelection
       ? "Оберіть розмір і колір"
       : isSelectedVariantOutOfStock
@@ -257,7 +276,7 @@ export function ProductDetailsActions({
         ) : needsFullSelection && hasActiveVariants ? (
           <span className={styles.priceMuted}>Оберіть розмір і колір</span>
         ) : isCatalogUnavailable ? (
-          <span className={styles.priceMuted}>Товар тимчасово недоступний</span>
+          <span className={styles.priceMuted}>Немає в наявності</span>
         ) : (
           <span className={styles.priceMuted}>Ціна уточнюється</span>
         )}
@@ -272,14 +291,15 @@ export function ProductDetailsActions({
 
       <p className={canAddToCart ? styles.inStock : styles.outOfStock}>{statusText}</p>
 
-      {hasActiveVariants ? (
+      {hasVisibleVariants ? (
         <>
           {sizes.length > 0 ? (
             <div className={styles.variantsBlock}>
               <p className={styles.sectionLabel}>Оберіть розмір</p>
               <div className={styles.sizeGrid}>
                 {sizes.map((size) => {
-                  const isAvailable = availableSizesForColor.has(size);
+                  const isAvailable =
+                    isPurchasableProduct && selectableSizes.has(size);
                   const isSelected = resolvedSize === size;
 
                   return (
@@ -289,11 +309,17 @@ export function ProductDetailsActions({
                       className={`${styles.sizeButton} ${isSelected ? styles.sizeButtonActive : ""}`}
                       disabled={!isAvailable}
                       onClick={() => {
+                        if (!isAvailable) {
+                          return;
+                        }
                         setSelectedSize(size);
                         setQuantity(1);
                       }}
                     >
-                      {size}
+                      <span>{size}</span>
+                      {!isAvailable ? (
+                        <span className={styles.optionBadge}>Немає</span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -306,7 +332,8 @@ export function ProductDetailsActions({
               <p className={styles.sectionLabel}>Оберіть колір</p>
               <div className={styles.colorGrid}>
                 {colors.map((color) => {
-                  const isAvailable = availableColorsForResolvedSize.has(color);
+                  const isAvailable =
+                    isPurchasableProduct && selectableColorsForSize.has(color);
                   const isSelected = resolvedColor === color;
                   const swatch = colorMap[color] ?? neutralColor;
 
@@ -317,6 +344,9 @@ export function ProductDetailsActions({
                       className={`${styles.colorButton} ${isSelected ? styles.colorButtonActive : ""}`}
                       disabled={!isAvailable}
                       onClick={() => {
+                        if (!isAvailable) {
+                          return;
+                        }
                         setSelectedColor(color);
                         setQuantity(1);
                       }}
@@ -327,6 +357,9 @@ export function ProductDetailsActions({
                         aria-hidden="true"
                       />
                       <span>{color}</span>
+                      {!isAvailable ? (
+                        <span className={styles.optionBadge}>Немає</span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -335,7 +368,7 @@ export function ProductDetailsActions({
           ) : null}
         </>
       ) : (
-        <p className={styles.unavailableNotice}>Товар тимчасово недоступний</p>
+        <p className={styles.unavailableNotice}>Немає в наявності</p>
       )}
 
       <div className={styles.controlsRow}>

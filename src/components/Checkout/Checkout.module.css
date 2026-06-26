@@ -314,6 +314,18 @@
   gap: var(--space-md);
 }
 
+.checkoutNote {
+  padding: var(--space-lg);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.checkoutNote a {
+  color: var(--color-accent-hover);
+  font-weight: 700;
+}
+
 @media (max-width: 1023px) {
   .page {
     padding: var(--space-2xl) 0;

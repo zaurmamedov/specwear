@@ -1,3 +1,4 @@
+import type { ProductStatus } from "@/lib/product-status";
 import type { Brand, ProductImage, ProductVariant } from "@/types/product";
 import type { Category } from "@/types/category";
 
@@ -11,6 +12,7 @@ export type AdminProductSort =
 export type AdminProductFilters = {
   q?: string | null;
   category?: string | null;
+  status?: ProductStatus | null;
   sort?: AdminProductSort | null;
 };
 
@@ -20,6 +22,7 @@ export interface AdminProductListItem {
   slug: string;
   created_at: string;
   main_image_url: string | null;
+  status: ProductStatus;
   brand: Pick<Brand, "id" | "name" | "slug"> | null;
   category: Pick<Category, "id" | "name" | "slug"> | null;
   product_images: Pick<ProductImage, "id" | "image_url" | "alt" | "sort_order">[];
@@ -39,6 +42,7 @@ export interface AdminEditableProduct {
   short_description: string | null;
   description: string | null;
   main_image_url: string | null;
+  status: ProductStatus;
   is_active: boolean;
   is_featured: boolean;
   is_new: boolean;
@@ -88,6 +92,7 @@ export type AdminProductUpdateInput = {
   category_id: string;
   brand_id: string | null;
   main_image_url: string | null;
+  status: ProductStatus;
   is_active: boolean;
   is_featured: boolean;
   is_new: boolean;
@@ -120,6 +125,7 @@ export type AdminProductCreateInput = {
   category_id: string;
   brand_id: string | null;
   main_image_url: string | null;
+  status: ProductStatus;
   is_active: boolean;
   is_featured: boolean;
   is_new: boolean;

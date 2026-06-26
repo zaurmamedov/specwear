@@ -6,6 +6,11 @@ import { AdminProductsToolbar } from "@/components/AdminProducts";
 import styles from "@/components/AdminProducts/AdminProducts.module.css";
 import { isSupabaseStorageUrl, isValidImageUrl } from "@/lib/images";
 import {
+  getProductStatusLabel,
+  normalizeProductStatus,
+  type ProductStatus,
+} from "@/lib/product-status";
+import {
   getAdminProductCategories,
   getAdminProducts,
 } from "@/services/admin-products.service";
@@ -17,6 +22,7 @@ type AdminProductsPageProps = {
   searchParams: Promise<{
     q?: string | string[];
     category?: string | string[];
+    status?: string | string[];
     sort?: string | string[];
   }>;
 };
@@ -75,12 +81,14 @@ export default async function AdminProductsPage({
   const params = await searchParams;
   const query = getSingleValue(params.q);
   const category = getSingleValue(params.category);
+  const status = getSingleValue(params.status) as ProductStatus | "";
   const sort = (getSingleValue(params.sort) || "newest") as AdminProductSort;
 
   const [products, categories] = await Promise.all([
     getAdminProducts({
       q: query || null,
       category: category || null,
+      status: status || null,
       sort,
     }),
     getAdminProductCategories(),
@@ -106,6 +114,7 @@ export default async function AdminProductsPage({
       <AdminProductsToolbar
         initialQuery={query}
         initialCategory={category}
+        initialStatus={status}
         initialSort={sort}
         categories={categories}
       />
@@ -120,6 +129,7 @@ export default async function AdminProductsPage({
                 <col className={styles.colBrand} />
                 <col className={styles.colPrice} />
                 <col className={styles.colDiscount} />
+                <col className={styles.colStatus} />
                 <col className={styles.colCreated} />
                 <col className={styles.colAction} />
               </colgroup>
@@ -130,6 +140,7 @@ export default async function AdminProductsPage({
                   <th>Бренд</th>
                   <th>Ціна</th>
                   <th>Знижка</th>
+                  <th>Статус</th>
                   <th>Створено</th>
                   <th>Дія</th>
                 </tr>
@@ -139,6 +150,7 @@ export default async function AdminProductsPage({
                   const primaryVariant = getPrimaryVariant(product);
                   const imageUrl = getProductImage(product);
                   const discountLabel = getDiscountLabel(product);
+                  const productStatus = normalizeProductStatus(product.status);
 
                   return (
                     <tr key={product.id}>
@@ -177,6 +189,19 @@ export default async function AdminProductsPage({
                         {primaryVariant ? `${formatPrice(primaryVariant.retail_price)} грн` : "—"}
                       </td>
                       <td>{discountLabel ? <span className={styles.discount}>{discountLabel}</span> : "—"}</td>
+                      <td>
+                        <span
+                          className={`${styles.statusBadge} ${
+                            productStatus === "active"
+                              ? styles.statusActive
+                              : productStatus === "unavailable"
+                                ? styles.statusUnavailable
+                                : styles.statusArchived
+                          }`}
+                        >
+                          {getProductStatusLabel(productStatus)}
+                        </span>
+                      </td>
                       <td>{formatDate(product.created_at)}</td>
                       <td>
                         <Link href={`/admin/products/${product.id}/edit`} className={styles.editButton}>
@@ -195,6 +220,7 @@ export default async function AdminProductsPage({
               const primaryVariant = getPrimaryVariant(product);
               const imageUrl = getProductImage(product);
               const discountLabel = getDiscountLabel(product);
+              const productStatus = normalizeProductStatus(product.status);
 
               return (
                 <article key={product.id} className={styles.card}>
@@ -236,6 +262,21 @@ export default async function AdminProductsPage({
                   <div className={styles.cardRow}>
                     <span className={styles.meta}>Знижка</span>
                     {discountLabel ? <span className={styles.discount}>{discountLabel}</span> : <span>—</span>}
+                  </div>
+
+                  <div className={styles.cardRow}>
+                    <span className={styles.meta}>Статус</span>
+                    <span
+                      className={`${styles.statusBadge} ${
+                        productStatus === "active"
+                          ? styles.statusActive
+                          : productStatus === "unavailable"
+                            ? styles.statusUnavailable
+                            : styles.statusArchived
+                      }`}
+                    >
+                      {getProductStatusLabel(productStatus)}
+                    </span>
                   </div>
 
                   <div className={styles.cardFooter}>

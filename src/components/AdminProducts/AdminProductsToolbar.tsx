@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/Button";
+import type { ProductStatus } from "@/lib/product-status";
 import type { Category } from "@/types/category";
 import type { AdminProductSort } from "@/types/admin-product";
 
@@ -13,6 +14,7 @@ import styles from "./AdminProducts.module.css";
 type AdminProductsToolbarProps = {
   initialQuery: string;
   initialCategory: string;
+  initialStatus: ProductStatus | "";
   initialSort: AdminProductSort;
   categories: Category[];
 };
@@ -20,6 +22,7 @@ type AdminProductsToolbarProps = {
 export function AdminProductsToolbar({
   initialQuery,
   initialCategory,
+  initialStatus,
   initialSort,
   categories,
 }: AdminProductsToolbarProps) {
@@ -27,9 +30,15 @@ export function AdminProductsToolbar({
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(initialCategory);
+  const [status, setStatus] = useState<ProductStatus | "">(initialStatus);
   const [sort, setSort] = useState<AdminProductSort>(initialSort);
 
-  function updateUrl(nextQuery: string, nextCategory: string, nextSort: AdminProductSort) {
+  function updateUrl(
+    nextQuery: string,
+    nextCategory: string,
+    nextStatus: ProductStatus | "",
+    nextSort: AdminProductSort
+  ) {
     const params = new URLSearchParams(searchParams.toString());
     const trimmedQuery = nextQuery.trim();
 
@@ -45,6 +54,12 @@ export function AdminProductsToolbar({
       params.delete("category");
     }
 
+    if (nextStatus) {
+      params.set("status", nextStatus);
+    } else {
+      params.delete("status");
+    }
+
     if (nextSort && nextSort !== "newest") {
       params.set("sort", nextSort);
     } else {
@@ -57,7 +72,7 @@ export function AdminProductsToolbar({
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    updateUrl(query, category, sort);
+    updateUrl(query, category, status, sort);
   }
 
   return (
@@ -81,6 +96,19 @@ export function AdminProductsToolbar({
               {item.name}
             </option>
           ))}
+        </select>
+      </label>
+
+      <label className={styles.field}>
+        <span>Статус</span>
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value as ProductStatus | "")}
+        >
+          <option value="">Усі статуси</option>
+          <option value="active">Активні</option>
+          <option value="unavailable">Немає в наявності</option>
+          <option value="archived">Архівні</option>
         </select>
       </label>
 

@@ -1,5 +1,10 @@
 import { cache } from "react";
 
+import {
+  isPubliclyVisibleProductStatus,
+  isProductPurchasableStatus,
+  isProductUnavailableStatus,
+} from "@/lib/product-status";
 import { supabase } from "@/lib/supabase/client";
 import type { ProductCardData } from "@/types/product";
 
@@ -46,6 +51,13 @@ const productSelect = `
   product_variants(*)
 `;
 
+const productDetailsSelect = `
+  *,
+  brand:brands(*),
+  category:categories(id, name, slug),
+  product_images(*)
+`;
+
 function sortProductImages<T extends { sort_order: number; created_at: string }>(images: T[]) {
   return [...images].sort((left, right) => {
     if (left.sort_order !== right.sort_order) {
@@ -56,7 +68,51 @@ function sortProductImages<T extends { sort_order: number; created_at: string }>
   });
 }
 
-const getActiveProductsDataset = cache(async (): Promise<ProductCardData[]> => {
+function sortProductVariants<T extends { size: string | null; color: string | null }>(
+  variants: T[]
+) {
+  return [...variants].sort((left, right) => {
+    const leftSize = left.size?.trim() ?? "";
+    const rightSize = right.size?.trim() ?? "";
+    const sizeCompare = leftSize.localeCompare(rightSize, "uk", {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    if (sizeCompare !== 0) {
+      return sizeCompare;
+    }
+
+    const leftColor = left.color?.trim() ?? "";
+    const rightColor = right.color?.trim() ?? "";
+    return leftColor.localeCompare(rightColor, "uk", {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
+function normalizeCatalogRows(data: ProductCardData[] | null | undefined) {
+  return (data ?? [])
+    .filter((product) => isPubliclyVisibleProductStatus(product.status))
+    .map((product) => ({
+      ...product,
+      product_images: sortProductImages(product.product_images ?? []),
+      product_variants: sortProductVariants(
+        product.product_variants.filter((variant) => variant.is_active)
+      ),
+    }));
+}
+
+function normalizeProductDetailsRow(product: ProductCardData) {
+  return {
+    ...product,
+    product_images: sortProductImages(product.product_images ?? []),
+    product_variants: sortProductVariants(product.product_variants ?? []),
+  };
+}
+
+const getCatalogProductsDataset = cache(async (): Promise<ProductCardData[]> => {
   const { data, error } = await supabase
     .from("products")
     .select(productSelect)
@@ -69,22 +125,21 @@ const getActiveProductsDataset = cache(async (): Promise<ProductCardData[]> => {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
 
-  return normalizeProductRows((data ?? []) as unknown as ProductCardData[]);
+  return normalizeCatalogRows((data ?? []) as unknown as ProductCardData[]);
 });
 
-function normalizeProductRows(data: ProductCardData[] | null | undefined) {
-  return (data ?? []).map((product) => ({
-    ...product,
-    product_images: sortProductImages(product.product_images ?? []),
-    product_variants: product.product_variants.filter((variant) => variant.is_active),
-  }));
+function getSelectableVariants(product: ProductCardData) {
+  return product.product_variants.filter(
+    (variant) =>
+      variant.is_active &&
+      variant.retail_price !== null &&
+      variant.stock_quantity > 0
+  );
 }
 
 function getPrimaryPurchasablePrice(product: ProductCardData) {
   const variant =
-    product.product_variants.find(
-      (item) => item.is_active && item.retail_price !== null && item.stock_quantity > 0
-    ) ??
+    getSelectableVariants(product)[0] ??
     product.product_variants.find((item) => item.is_active && item.retail_price !== null) ??
     null;
 
@@ -92,9 +147,15 @@ function getPrimaryPurchasablePrice(product: ProductCardData) {
 }
 
 function isProductInStock(product: ProductCardData) {
-  return product.product_variants.some(
-    (variant) => variant.is_active && variant.stock_quantity > 0
-  );
+  if (!isProductPurchasableStatus(product.status)) {
+    return false;
+  }
+
+  return getSelectableVariants(product).length > 0;
+}
+
+function isProductOutOfStock(product: ProductCardData) {
+  return isProductUnavailableStatus(product.status) || !isProductInStock(product);
 }
 
 function matchesSearch(product: ProductCardData, rawQuery: string) {
@@ -143,7 +204,13 @@ function matchesVariantGroup(
 
   return product.product_variants.some((variant) => {
     const variantValue = variant[key]?.trim();
-    return Boolean(variantValue && selectedValues.includes(variantValue));
+    return Boolean(
+      variantValue &&
+        selectedValues.includes(variantValue) &&
+        variant.is_active &&
+        variant.stock_quantity > 0 &&
+        variant.retail_price !== null
+    );
   });
 }
 
@@ -169,7 +236,7 @@ function matchesAvailability(
   }
 
   if (includesOutOfStock) {
-    return !inStock;
+    return isProductOutOfStock(product);
   }
 
   return true;
@@ -268,7 +335,7 @@ function sortProducts(products: ProductCardData[], sort?: ProductSort | null) {
 }
 
 export async function getProducts(filters?: ProductFilters): Promise<ProductCardData[]> {
-  const products = await getActiveProductsDataset();
+  const products = await getCatalogProductsDataset();
   const filteredProducts = filterProducts(products, filters);
 
   return sortProducts(filteredProducts, filters?.sort ?? "default");
@@ -277,7 +344,7 @@ export async function getProducts(filters?: ProductFilters): Promise<ProductCard
 export async function getAvailableVariantFilters(
   filters?: ProductFilters
 ): Promise<VariantFilterOptions> {
-  const products = await getActiveProductsDataset();
+  const products = await getCatalogProductsDataset();
 
   const brandProducts = filterProducts(products, {
     ...filters,
@@ -316,7 +383,7 @@ export async function getAvailableVariantFilters(
   const sizes = Array.from(
     new Set(
       sizeProducts.flatMap((product) =>
-        product.product_variants
+        getSelectableVariants(product)
           .map((variant) => variant.size?.trim())
           .filter((value): value is string => Boolean(value))
       )
@@ -328,7 +395,7 @@ export async function getAvailableVariantFilters(
   const colors = Array.from(
     new Set(
       colorProducts.flatMap((product) =>
-        product.product_variants
+        getSelectableVariants(product)
           .map((variant) => variant.color?.trim())
           .filter((value): value is string => Boolean(value))
       )
@@ -339,7 +406,7 @@ export async function getAvailableVariantFilters(
 
   const availability: AvailabilityFilter[] = [];
   const hasInStock = availabilityProducts.some((product) => isProductInStock(product));
-  const hasOutOfStock = availabilityProducts.some((product) => !isProductInStock(product));
+  const hasOutOfStock = availabilityProducts.some((product) => isProductOutOfStock(product));
 
   if (hasInStock) {
     availability.push("in_stock");
@@ -358,7 +425,7 @@ export async function getAvailableVariantFilters(
 }
 
 export async function getProductFilterPreviewData(): Promise<ProductFilterPreviewItem[]> {
-  const products = await getActiveProductsDataset();
+  const products = await getCatalogProductsDataset();
 
   return products.map((product) => ({
     categorySlug: product.category?.slug ?? null,
@@ -366,14 +433,14 @@ export async function getProductFilterPreviewData(): Promise<ProductFilterPrevie
     brandName: product.brand?.name ?? null,
     sizes: Array.from(
       new Set(
-        product.product_variants
+        getSelectableVariants(product)
           .map((variant) => variant.size?.trim())
           .filter((value): value is string => Boolean(value))
       )
     ),
     colors: Array.from(
       new Set(
-        product.product_variants
+        getSelectableVariants(product)
           .map((variant) => variant.color?.trim())
           .filter((value): value is string => Boolean(value))
       )
@@ -384,13 +451,15 @@ export async function getProductFilterPreviewData(): Promise<ProductFilterPrevie
 
 export const getProductBySlug = cache(
   async (slug: string): Promise<ProductCardData | null> => {
-    const { data, error } = await supabase
+    const { createServerSupabaseAdminClient } = await import("@/lib/supabase/server");
+    const adminSupabase = createServerSupabaseAdminClient();
+
+    const { data, error } = await adminSupabase
       .from("products")
-      .select(productSelect)
+      .select(productDetailsSelect)
       .eq("slug", slug)
       .eq("is_active", true)
       .order("sort_order", { foreignTable: "product_images", ascending: true })
-      .order("retail_price", { foreignTable: "product_variants", ascending: true })
       .maybeSingle();
 
     if (error) {
@@ -403,10 +472,43 @@ export const getProductBySlug = cache(
       return null;
     }
 
-    return {
+    if (!isPubliclyVisibleProductStatus(product.status)) {
+      return null;
+    }
+
+    const { data: variants, error: variantsError } = await adminSupabase
+      .from("product_variants")
+      .select("*")
+      .eq("product_id", product.id)
+      .order("created_at", { ascending: true });
+
+    if (variantsError) {
+      throw new Error(
+        `Failed to fetch product variants for slug "${slug}": ${variantsError.message}`
+      );
+    }
+
+    const allVariants = (variants ?? []) as ProductCardData["product_variants"];
+    const activeVariantsCount = allVariants.filter((variant) => variant.is_active).length;
+    const inactiveVariantsCount = allVariants.length - activeVariantsCount;
+
+    console.log("[getProductBySlug] product details variants", {
+      slug,
+      totalVariants: allVariants.length,
+      activeVariantsCount,
+      inactiveVariantsCount,
+      variants: allVariants.map((variant) => ({
+        id: variant.id,
+        size: variant.size,
+        color: variant.color,
+        is_active: variant.is_active,
+        stock_quantity: variant.stock_quantity,
+      })),
+    });
+
+    return normalizeProductDetailsRow({
       ...product,
-      product_images: sortProductImages(product.product_images ?? []),
-      product_variants: product.product_variants.filter((variant) => variant.is_active),
-    };
+      product_variants: allVariants,
+    } as ProductCardData);
   }
 );

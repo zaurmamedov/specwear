@@ -9,13 +9,20 @@ import styles from "./Cart.module.css";
 type CartSummaryProps = {
   itemCount: number;
   subtotal: number;
+  canCheckout?: boolean;
+  warningMessage?: string | null;
 };
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("uk-UA").format(price);
 }
 
-export function CartSummary({ itemCount, subtotal }: CartSummaryProps) {
+export function CartSummary({
+  itemCount,
+  subtotal,
+  canCheckout = true,
+  warningMessage = null,
+}: CartSummaryProps) {
   const delivery = 0;
   const total = subtotal + delivery;
 
@@ -43,9 +50,17 @@ export function CartSummary({ itemCount, subtotal }: CartSummaryProps) {
         <strong>{formatPrice(total)} грн</strong>
       </div>
 
-      <Button href="/checkout" className={styles.checkoutButton} size="large">
-        Оформити замовлення
-      </Button>
+      {canCheckout ? (
+        <Button href="/checkout" className={styles.checkoutButton} size="large">
+          Оформити замовлення
+        </Button>
+      ) : (
+        <Button className={styles.checkoutButton} size="large" disabled>
+          Оформити замовлення
+        </Button>
+      )}
+
+      {warningMessage ? <p className={styles.summaryWarning}>{warningMessage}</p> : null}
 
       <Link href="/catalog" className={styles.secondaryLink}>
         Продовжити покупки

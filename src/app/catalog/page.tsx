@@ -147,11 +147,11 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     <main className={styles.page}>
       <section className={styles.hero}>
         <p className={styles.eyebrow}>Каталог</p>
-        <h1>СПЕЦОДЯГ, СПЕЦВЗУТТЯ ТА ЗАСОБИ ЗАХИСТУ</h1>
+        {/* <h1>СПЕЦОДЯГ, СПЕЦВЗУТТЯ ТА ЗАСОБИ ЗАХИСТУ</h1>
         <p>
           Каталог читає лише наявні дані з Supabase: товари, зображення, варіанти,
           бренди та категорії. Без кошика, обраного чи checkout-логіки на цьому етапі.
-        </p>
+        </p> */}
         <span className={styles.summary}>Товарів у каталозі: {products.length}</span>
         {query ? <span className={styles.searchTag}>Пошук: {query}</span> : null}
       </section>

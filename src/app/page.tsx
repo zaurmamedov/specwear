@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/Button";
 import { ProductCard } from "@/components/ProductCard/ProductCard";
+import { isProductPurchasableStatus } from "@/lib/product-status";
 import { getCategories } from "@/services/categories.service";
 import { getProducts } from "@/services/products.service";
 import type { Category } from "@/types/category";
@@ -92,10 +93,18 @@ function getHomeCategories(categories: Category[]): HomeCategoryCard[] {
 function getPopularProducts<T extends Awaited<ReturnType<typeof getProducts>>>(products: T) {
   const ranked = [...products].sort((left, right) => {
     const leftInStock = left.product_variants.some(
-      (variant) => variant.is_active && variant.stock_quantity > 0 && variant.retail_price !== null
+      (variant) =>
+        isProductPurchasableStatus(left.status) &&
+        variant.is_active &&
+        variant.stock_quantity > 0 &&
+        variant.retail_price !== null
     );
     const rightInStock = right.product_variants.some(
-      (variant) => variant.is_active && variant.stock_quantity > 0 && variant.retail_price !== null
+      (variant) =>
+        isProductPurchasableStatus(right.status) &&
+        variant.is_active &&
+        variant.stock_quantity > 0 &&
+        variant.retail_price !== null
     );
 
     if (leftInStock !== rightInStock) {

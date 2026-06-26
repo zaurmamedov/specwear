@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeProductStatus } from "@/lib/product-status";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Category } from "@/types/category";
 import type { Brand } from "@/types/product";
@@ -58,6 +59,7 @@ function matchesSearch(product: AdminProductListItem, rawQuery: string) {
   const haystack = [
     product.name,
     product.brand?.name ?? null,
+    product.status,
     ...product.product_variants.map((variant) => variant.sku),
   ]
     .filter(Boolean)
@@ -211,6 +213,7 @@ export async function getAdminProducts(
       slug,
       created_at,
       main_image_url,
+      status,
       brand:brands(id, name, slug),
       category:categories(id, name, slug),
       product_images(id, image_url, alt, sort_order),
@@ -228,6 +231,12 @@ export async function getAdminProducts(
 
   if (filters.category) {
     products = products.filter((product) => product.category?.slug === filters.category);
+  }
+
+  if (filters.status) {
+    products = products.filter(
+      (product) => normalizeProductStatus(product.status) === filters.status
+    );
   }
 
   if (filters.q?.trim()) {
@@ -282,6 +291,7 @@ export async function getAdminProductById(
       short_description,
       description,
       main_image_url,
+      status,
       is_active,
       is_featured,
       is_new,
@@ -498,7 +508,8 @@ export async function updateAdminProduct(
       category_id: input.category_id,
       brand_id: input.brand_id,
       main_image_url: input.main_image_url,
-      is_active: input.is_active,
+      status: input.status,
+      is_active: input.status !== "archived",
       is_featured: input.is_featured,
       is_new: input.is_new,
       is_sale: input.is_sale,
@@ -567,7 +578,8 @@ export async function createAdminProduct(
     category_id: input.category_id,
     brand_id: input.brand_id,
     main_image_url: input.main_image_url ?? input.image.image_url ?? null,
-    is_active: input.is_active,
+    status: input.status,
+    is_active: input.status !== "archived",
     is_featured: input.is_featured,
     is_new: input.is_new,
     is_sale: input.is_sale,

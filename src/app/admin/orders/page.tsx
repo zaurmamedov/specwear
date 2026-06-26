@@ -4,6 +4,7 @@ import {
   OrderStatusBadge,
   OrdersToolbar,
 } from "@/components/AdminOrders";
+import { getDeliveryServiceLabel } from "@/lib/order-labels";
 import styles from "@/components/AdminOrders/AdminOrders.module.css";
 import { getOrders } from "@/services/orders.service";
 import type { OrderStatus } from "@/types/order";
@@ -37,22 +38,6 @@ function formatDate(value: string) {
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("uk-UA").format(value);
-}
-
-function getDeliveryLabel(service: string) {
-  if (service === "nova_poshta") {
-    return "Нова Пошта";
-  }
-
-  if (service === "ukrposhta") {
-    return "Укрпошта";
-  }
-
-  if (service === "pickup") {
-    return "Самовивіз";
-  }
-
-  return service;
 }
 
 function getShortOrderId(id: string) {
@@ -182,7 +167,7 @@ export default async function AdminOrdersPage({
                         {order.phone}
                       </a>
                     </td>
-                    <td>{getDeliveryLabel(order.delivery_service)}</td>
+                    <td>{getDeliveryServiceLabel(order.delivery_service)}</td>
                     <td className={styles.price}>{formatPrice(order.total)} грн</td>
                     <td><OrderStatusBadge status={order.status} /></td>
                   </tr>
@@ -209,7 +194,7 @@ export default async function AdminOrdersPage({
                   <a href={`tel:${order.phone}`} className={styles.phoneLink}>
                     {order.phone}
                   </a>
-                  <span>{getDeliveryLabel(order.delivery_service)}</span>
+                  <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
                 </div>
                 <div className={styles.cardRow}>
                   <span className={styles.muted}>Сума</span>

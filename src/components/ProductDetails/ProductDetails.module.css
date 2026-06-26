@@ -274,6 +274,12 @@
   cursor: not-allowed;
 }
 
+.sizeButton:disabled,
+.colorButton:disabled {
+  background: rgba(100, 116, 139, 0.08);
+  color: rgba(17, 19, 21, 0.58);
+}
+
 .sizeButtonActive {
   border-color: var(--color-dark);
   background: var(--color-dark);
@@ -315,6 +321,21 @@
   flex: 0 0 auto;
   border: 1px solid rgba(17, 19, 21, 0.18);
   border-radius: 50%;
+}
+
+.optionBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.3rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.14);
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .controlsRow {

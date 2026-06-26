@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/Button";
+import {
+  getProductStatusDescription,
+  type ProductStatus,
+} from "@/lib/product-status";
 import type { Category } from "@/types/category";
 import type { Brand } from "@/types/product";
 
@@ -63,7 +67,7 @@ export function AdminProductCreateForm({
   const [categoryId, setCategoryId] = useState("");
   const [brandId, setBrandId] = useState("");
   const [mainImageUrl, setMainImageUrl] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [status, setStatus] = useState<ProductStatus>("active");
   const [isFeatured, setIsFeatured] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [isSale, setIsSale] = useState(false);
@@ -176,7 +180,8 @@ export function AdminProductCreateForm({
           category_id: categoryId,
           brand_id: brandId || null,
           main_image_url: toOptionalString(mainImageUrl),
-          is_active: isActive,
+          status,
+          is_active: status !== "archived",
           is_featured: isFeatured,
           is_new: isNew,
           is_sale: isSale,
@@ -322,13 +327,19 @@ export function AdminProductCreateForm({
           </div>
 
           <div className={styles.toggles}>
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(event) => setIsActive(event.target.checked)}
-              />
-              <span>Активний</span>
+            <label className={`${styles.field} ${styles.toggleField}`}>
+              <span>Статус товару</span>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value as ProductStatus)}
+              >
+                <option value="active">Активний</option>
+                <option value="unavailable">Немає в наявності</option>
+                <option value="archived">Архівний</option>
+              </select>
+              <small className={styles.helperText}>
+                {getProductStatusDescription(status)}
+              </small>
             </label>
             <label className={styles.toggle}>
               <input
