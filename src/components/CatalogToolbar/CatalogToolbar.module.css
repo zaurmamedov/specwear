@@ -3,17 +3,23 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-md);
   align-items: end;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .searchForm {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: var(--space-sm);
+  align-items: center;
 }
 
 .searchField {
-  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .searchField input,
@@ -29,6 +35,10 @@
   font: inherit;
 }
 
+.searchField input {
+  padding-inline: 1.1rem;
+}
+
 .searchField input:focus-visible,
 .sortField select:focus-visible {
   outline: 2px solid rgba(249, 115, 22, 0.32);
@@ -36,8 +46,12 @@
   border-color: rgba(249, 115, 22, 0.38);
 }
 
-.searchButton,
+.submitButton,
 .clearButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   min-height: 3rem;
   padding: 0 1.1rem;
   border-radius: var(--radius-pill);
@@ -48,21 +62,31 @@
   text-transform: uppercase;
 }
 
-.searchButton {
-  background: var(--color-accent);
-  color: var(--color-white);
+.submitButton {
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--color-accent);
 }
 
-.clearButton {
-  border: 1px solid var(--color-border);
-  background: rgba(17, 19, 21, 0.02);
-  color: var(--color-dark);
+.submitButton:hover {
+  border-color: var(--color-accent);
+  background: rgba(249, 115, 22, 0.16);
+}
+
+.submitLabel {
+  white-space: nowrap;
+}
+
+.clearButton:hover {
+  border-color: rgba(17, 19, 21, 0.16);
+  background: rgba(17, 19, 21, 0.06);
 }
 
 .sortField {
   display: grid;
   gap: 0.45rem;
   min-width: 16rem;
+  justify-self: end;
 }
 
 .sortField span {
@@ -71,6 +95,18 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.sortField select {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 246, 0.98));
+  color: var(--color-dark);
+}
+
+.clearButton {
+  border: 1px solid var(--color-border);
+  background: rgba(17, 19, 21, 0.02);
+  color: var(--color-dark);
 }
 
 .visuallyHidden {
@@ -88,9 +124,20 @@
 @media (max-width: 767px) {
   .toolbar {
     grid-template-columns: 1fr;
+    padding: 1rem;
   }
 
   .sortField {
     min-width: 0;
+    justify-self: stretch;
+  }
+
+  .searchForm {
+    grid-template-columns: 1fr;
+  }
+
+  .submitButton,
+  .clearButton {
+    width: 100%;
   }
 }

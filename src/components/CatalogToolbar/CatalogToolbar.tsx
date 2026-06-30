@@ -73,10 +73,6 @@ export function CatalogToolbar({ initialQuery, initialSort }: CatalogToolbarProp
           />
         </label>
 
-        <button type="submit" className={styles.searchButton}>
-          Пошук
-        </button>
-
         {initialQuery ? (
           <button
             type="button"
@@ -89,6 +85,11 @@ export function CatalogToolbar({ initialQuery, initialSort }: CatalogToolbarProp
             Очистити
           </button>
         ) : null}
+
+        <button type="submit" className={styles.submitButton} aria-label="Шукати">
+          <span aria-hidden="true">⌕</span>
+          <span className={styles.submitLabel}>Шукати</span>
+        </button>
       </form>
 
       <label className={styles.sortField}>

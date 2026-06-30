@@ -26,6 +26,25 @@ type CatalogPageProps = {
   }>;
 };
 
+function getProductsCountLabel(count: number) {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return `${count} товарів`;
+  }
+
+  if (lastDigit === 1) {
+    return `${count} товар`;
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} товари`;
+  }
+
+  return `${count} товарів`;
+}
+
 function getSingleValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -95,6 +114,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     getAvailableVariantFilters(selectedFilters),
     getProductFilterPreviewData(),
   ]);
+  const productsCountLabel = getProductsCountLabel(products.length);
 
   const categoryMap = new Map(categories.map((category) => [category.slug, category.name]));
   const brandMap = new Map(variantFilters.brands.map((brand) => [brand.slug, brand.name]));
@@ -146,14 +166,19 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <p className={styles.eyebrow}>Каталог</p>
-        {/* <h1>СПЕЦОДЯГ, СПЕЦВЗУТТЯ ТА ЗАСОБИ ЗАХИСТУ</h1>
-        <p>
-          Каталог читає лише наявні дані з Supabase: товари, зображення, варіанти,
-          бренди та категорії. Без кошика, обраного чи checkout-логіки на цьому етапі.
-        </p> */}
-        <span className={styles.summary}>Товарів у каталозі: {products.length}</span>
-        {query ? <span className={styles.searchTag}>Пошук: {query}</span> : null}
+        <div className={styles.heroContent}>
+          <p className={styles.eyebrow}>Каталог</p>
+          <h1>ПІДБЕРІТЬ СПЕЦОДЯГ ДЛЯ РОБОТИ</h1>
+          <p className={styles.subtitle}>
+            Спецодяг, спецвзуття та засоби індивідуального захисту для будівництва,
+            виробництва, складу та сервісу.
+          </p>
+        </div>
+
+        <div className={styles.heroMeta}>
+          <span className={styles.summary}>{productsCountLabel}</span>
+          {query ? <span className={styles.searchTag}>Пошук: {query}</span> : null}
+        </div>
       </section>
 
       <section className={styles.catalogLayout}>
@@ -180,7 +205,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
           />
 
           <section className={styles.resultsBar}>
-            <p className={styles.resultCount}>Знайдено {products.length} товарів</p>
+            <p className={styles.resultCount}>Знайдено {productsCountLabel}</p>
 
             {activeTags.length > 0 ? (
               <div className={styles.activeFilters}>
