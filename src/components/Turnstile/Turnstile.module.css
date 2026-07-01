@@ -1,0 +1,50 @@
+.root {
+  display: grid;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.widgetShell {
+  width: 100%;
+  min-height: 4.9rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 246, 0.98));
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.widget {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 4rem;
+}
+
+.message {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.warning {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
+}
+
+.error {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+@media (max-width: 767px) {
+  .widgetShell {
+    padding: 0.65rem;
+  }
+}

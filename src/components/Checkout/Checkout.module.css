@@ -207,6 +207,14 @@
   font-weight: 600;
 }
 
+.warning {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
+  font-weight: 600;
+}
+
 .helper {
   color: var(--color-muted);
   font-size: var(--font-size-sm);

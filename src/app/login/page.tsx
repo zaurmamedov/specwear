@@ -25,6 +25,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const redirectTo = getSingleValue(params.redirectTo) || "/account";
   const cookieStore = await cookies();
   const user = await getCustomerUserFromCookieStore(cookieStore);
+  const developmentWarning =
+    process.env.NODE_ENV !== "production" &&
+    (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ||
+      !process.env.TURNSTILE_SECRET_KEY?.trim())
+      ? "Turnstile працює в режимі development bypass, бо ключі налаштовані не повністю."
+      : null;
 
   if (user) {
     redirect(redirectTo);
@@ -39,7 +45,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p>Увійдіть у свій кабінет, щоб бачити історію замовлень і зберігати дані.</p>
         </div>
 
-        <CustomerLoginForm redirectTo={redirectTo} />
+        <CustomerLoginForm redirectTo={redirectTo} developmentWarning={developmentWarning} />
       </section>
     </main>
   );

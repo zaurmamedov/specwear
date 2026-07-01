@@ -6,6 +6,12 @@ import styles from "@/components/Checkout/Checkout.module.css";
 export default async function CheckoutPage() {
   const user = await getOptionalCustomerUser();
   const profile = user ? await getProfileByUserId(user.id) : null;
+  const developmentWarning =
+    process.env.NODE_ENV !== "production" &&
+    (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ||
+      !process.env.TURNSTILE_SECRET_KEY?.trim())
+      ? "Turnstile працює в режимі development bypass, бо ключі налаштовані не повністю."
+      : null;
 
   return (
     <main className={styles.page}>
@@ -19,6 +25,7 @@ export default async function CheckoutPage() {
       </section>
 
       <CheckoutClient
+        developmentWarning={developmentWarning}
         isAuthenticated={Boolean(user)}
         initialProfile={
           user

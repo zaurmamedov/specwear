@@ -2,22 +2,34 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import {
+  TURNSTILE_EXPIRED_MESSAGE,
+  TURNSTILE_LOAD_ERROR_MESSAGE,
+  TURNSTILE_REQUIRED_MESSAGE,
+} from "@/lib/security/turnstile.shared";
 
 import styles from "./Auth.module.css";
 
 type CustomerLoginFormProps = {
+  developmentWarning?: string | null;
   redirectTo: string;
 };
 
-export function CustomerLoginForm({ redirectTo }: CustomerLoginFormProps) {
+export function CustomerLoginForm({
+  developmentWarning = null,
+  redirectTo,
+}: CustomerLoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   return (
     <form
@@ -25,6 +37,12 @@ export function CustomerLoginForm({ redirectTo }: CustomerLoginFormProps) {
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
+
+        if (!turnstileToken) {
+          setError(TURNSTILE_REQUIRED_MESSAGE);
+          return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -36,6 +54,7 @@ export function CustomerLoginForm({ redirectTo }: CustomerLoginFormProps) {
             body: JSON.stringify({
               email,
               password,
+              turnstileToken,
             }),
           });
 
@@ -48,6 +67,8 @@ export function CustomerLoginForm({ redirectTo }: CustomerLoginFormProps) {
           router.push(redirectTo || "/account");
           router.refresh();
         } catch (submitError) {
+          setTurnstileToken(null);
+          turnstileRef.current?.reset();
           setError(
             submitError instanceof Error
               ? submitError.message
@@ -84,10 +105,38 @@ export function CustomerLoginForm({ redirectTo }: CustomerLoginFormProps) {
         />
       </div>
 
+      {developmentWarning ? <p className={styles.warning}>{developmentWarning}</p> : null}
+
+      <Turnstile
+        ref={turnstileRef}
+        onVerify={(token) => {
+          setTurnstileToken(token);
+          setError((current) =>
+            current === TURNSTILE_REQUIRED_MESSAGE ||
+            current === TURNSTILE_EXPIRED_MESSAGE ||
+            current === TURNSTILE_LOAD_ERROR_MESSAGE
+              ? null
+              : current
+          );
+        }}
+        onExpire={() => {
+          setTurnstileToken(null);
+          setError(TURNSTILE_EXPIRED_MESSAGE);
+        }}
+        onError={() => {
+          setTurnstileToken(null);
+          setError(TURNSTILE_LOAD_ERROR_MESSAGE);
+        }}
+        onUnsupported={() => {
+          setTurnstileToken(null);
+          setError(TURNSTILE_LOAD_ERROR_MESSAGE);
+        }}
+      />
+
       {error ? <p className={styles.error}>{error}</p> : null}
 
       <div className={styles.actions}>
-        <Button type="submit" size="large" disabled={isSubmitting}>
+        <Button type="submit" size="large" disabled={isSubmitting || !turnstileToken}>
           Увійти
         </Button>
         <p className={styles.helper}>

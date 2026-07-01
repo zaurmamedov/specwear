@@ -15,7 +15,13 @@ import {
 } from "react";
 
 import { Button } from "@/components/Button";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { isSupabaseStorageUrl } from "@/lib/images";
+import {
+  TURNSTILE_EXPIRED_MESSAGE,
+  TURNSTILE_LOAD_ERROR_MESSAGE,
+  TURNSTILE_REQUIRED_MESSAGE,
+} from "@/lib/security/turnstile.shared";
 import { useCartStore } from "@/stores/cart.store";
 
 import styles from "./Checkout.module.css";
@@ -170,11 +176,13 @@ function validateEmail(email: string) {
 }
 
 type CheckoutClientProps = {
+  developmentWarning?: string | null;
   initialProfile?: CheckoutProfileData | null;
   isAuthenticated?: boolean;
 };
 
 export function CheckoutClient({
+  developmentWarning = null,
   initialProfile = null,
   isAuthenticated = false,
 }: CheckoutClientProps) {
@@ -199,6 +207,7 @@ export function CheckoutClient({
   const [warehouseSearchError, setWarehouseSearchError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [cartAvailability, setCartAvailability] = useState<CartAvailabilityResult[]>([]);
   const [touched, setTouched] = useState<CheckoutTouchedState>({
     firstName: false,
@@ -216,6 +225,7 @@ export function CheckoutClient({
   const deliveryCityRef = useRef<HTMLInputElement>(null);
   const deliveryWarehouseRef = useRef<HTMLSelectElement | HTMLInputElement>(null);
   const deliveryAddressRef = useRef<HTMLInputElement>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   const subtotal = useMemo(
     () => items.reduce((total, item) => total + (item.price ?? 0) * item.quantity, 0),
@@ -450,7 +460,8 @@ export function CheckoutClient({
     items.length > 0 &&
     isFormValid &&
     !isSubmitting &&
-    !hasUnavailableCartItems;
+    !hasUnavailableCartItems &&
+    Boolean(turnstileToken);
 
   function updateField<Key extends keyof CheckoutFormState>(
     key: Key,
@@ -631,6 +642,10 @@ export function CheckoutClient({
     event.preventDefault();
 
     if (!canSubmit) {
+      if (!turnstileToken) {
+        setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
+      }
+
       setTouched({
         firstName: true,
         lastName: true,
@@ -666,6 +681,7 @@ export function CheckoutClient({
         deliveryPrice,
         total,
         items,
+        turnstileToken,
       };
 
       const response = await fetch("/api/checkout/orders", {
@@ -688,6 +704,8 @@ export function CheckoutClient({
       clearCart();
       router.replace(`/checkout/success?order=${payload.orderId}`);
     } catch (error) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
       setSubmitError(
         error instanceof Error
           ? `Не вдалося оформити замовлення: ${error.message}`
@@ -1073,6 +1091,32 @@ export function CheckoutClient({
         ) : null}
 
         <div className={styles.submitRow}>
+          {developmentWarning ? <p className={styles.warning}>{developmentWarning}</p> : null}
+          <Turnstile
+            ref={turnstileRef}
+            onVerify={(token) => {
+              setTurnstileToken(token);
+              setSubmitError((current) =>
+                current === TURNSTILE_REQUIRED_MESSAGE ||
+                current === TURNSTILE_EXPIRED_MESSAGE ||
+                current === TURNSTILE_LOAD_ERROR_MESSAGE
+                  ? null
+                  : current
+              );
+            }}
+            onExpire={() => {
+              setTurnstileToken(null);
+              setSubmitError(TURNSTILE_EXPIRED_MESSAGE);
+            }}
+            onError={() => {
+              setTurnstileToken(null);
+              setSubmitError(TURNSTILE_LOAD_ERROR_MESSAGE);
+            }}
+            onUnsupported={() => {
+              setTurnstileToken(null);
+              setSubmitError(TURNSTILE_LOAD_ERROR_MESSAGE);
+            }}
+          />
           <Button type="submit" size="large" disabled={!canSubmit}>
             {isSubmitting ? "Оформляємо..." : "Оформити замовлення"}
           </Button>
@@ -1088,6 +1132,9 @@ export function CheckoutClient({
             <p className={styles.helper}>
               Оновіть кошик: частина товарів більше недоступна для замовлення.
             </p>
+          ) : null}
+          {!turnstileToken ? (
+            <p className={styles.helper}>Підтвердьте перевірку безпеки перед оформленням.</p>
           ) : null}
         </div>
       </form>

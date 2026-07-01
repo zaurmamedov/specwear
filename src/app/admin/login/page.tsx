@@ -41,6 +41,12 @@ export default async function AdminLoginPage({
   const error = getSingleValue(params.error);
   const cookieStore = await cookies();
   const currentUser = await getAdminUserFromCookieStore(cookieStore);
+  const developmentWarning =
+    process.env.NODE_ENV !== "production" &&
+    (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ||
+      !process.env.TURNSTILE_SECRET_KEY?.trim())
+      ? "Turnstile працює в режимі development bypass, бо ключі налаштовані не повністю."
+      : null;
 
   if (currentUser && isAdminEmail(currentUser.email)) {
     redirect(nextPath);
@@ -57,7 +63,7 @@ export default async function AdminLoginPage({
 
         {error ? <p className={styles.error}>{getErrorMessage(error)}</p> : null}
 
-        <AdminLoginForm nextPath={nextPath} />
+        <AdminLoginForm nextPath={nextPath} developmentWarning={developmentWarning} />
       </section>
     </main>
   );

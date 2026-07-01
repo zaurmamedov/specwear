@@ -2,6 +2,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getCustomerUserFromCookieStore } from "@/lib/customer-auth";
+import {
+  getTurnstileRemoteIp,
+  verifyTurnstileToken,
+} from "@/lib/security/turnstile";
+import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderTelegramNotification } from "@/lib/telegram";
 import { validateCartItems } from "@/services/cart-validation.service";
@@ -40,11 +45,24 @@ type CheckoutOrderPayload = {
   deliveryPrice: number;
   total: number;
   items: CheckoutOrderItemInput[];
+  turnstileToken?: string;
 };
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckoutOrderPayload;
+    const turnstileVerification = await verifyTurnstileToken(
+      body.turnstileToken,
+      getTurnstileRemoteIp(request)
+    );
+
+    if (!turnstileVerification.success) {
+      console.error("Turnstile verification failed on checkout:", {
+        error: turnstileVerification.error,
+      });
+
+      return NextResponse.json({ error: TURNSTILE_FAILURE_MESSAGE }, { status: 400 });
+    }
 
     if (!body.firstName?.trim() || !body.lastName?.trim() || !body.phone?.trim()) {
       return NextResponse.json(

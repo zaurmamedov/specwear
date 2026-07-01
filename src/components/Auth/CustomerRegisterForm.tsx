@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import {
+  TURNSTILE_EXPIRED_MESSAGE,
+  TURNSTILE_LOAD_ERROR_MESSAGE,
+  TURNSTILE_REQUIRED_MESSAGE,
+} from "@/lib/security/turnstile.shared";
 
 import styles from "./Auth.module.css";
 
 type CustomerRegisterFormProps = {
+  developmentWarning?: string | null;
   redirectTo: string;
 };
 
@@ -20,7 +27,10 @@ function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) {
+export function CustomerRegisterForm({
+  developmentWarning = null,
+  redirectTo,
+}: CustomerRegisterFormProps) {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -30,6 +40,8 @@ export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) 
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   const validationError = useMemo(() => {
     if (!firstName.trim()) {
@@ -70,6 +82,11 @@ export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) 
           return;
         }
 
+        if (!turnstileToken) {
+          setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
+          return;
+        }
+
         setSubmitError(null);
         setIsSubmitting(true);
 
@@ -85,6 +102,7 @@ export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) 
               phone,
               email,
               password,
+              turnstileToken,
             }),
           });
 
@@ -97,6 +115,8 @@ export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) 
           router.push(redirectTo || "/account");
           router.refresh();
         } catch (error) {
+          setTurnstileToken(null);
+          turnstileRef.current?.reset();
           setSubmitError(
             error instanceof Error ? error.message : "Не вдалося створити акаунт."
           );
@@ -182,10 +202,38 @@ export function CustomerRegisterForm({ redirectTo }: CustomerRegisterFormProps) 
         </div>
       </div>
 
+      {developmentWarning ? <p className={styles.warning}>{developmentWarning}</p> : null}
+
+      <Turnstile
+        ref={turnstileRef}
+        onVerify={(token) => {
+          setTurnstileToken(token);
+          setSubmitError((current) =>
+            current === TURNSTILE_REQUIRED_MESSAGE ||
+            current === TURNSTILE_EXPIRED_MESSAGE ||
+            current === TURNSTILE_LOAD_ERROR_MESSAGE
+              ? null
+              : current
+          );
+        }}
+        onExpire={() => {
+          setTurnstileToken(null);
+          setSubmitError(TURNSTILE_EXPIRED_MESSAGE);
+        }}
+        onError={() => {
+          setTurnstileToken(null);
+          setSubmitError(TURNSTILE_LOAD_ERROR_MESSAGE);
+        }}
+        onUnsupported={() => {
+          setTurnstileToken(null);
+          setSubmitError(TURNSTILE_LOAD_ERROR_MESSAGE);
+        }}
+      />
+
       {submitError ? <p className={styles.error}>{submitError}</p> : null}
 
       <div className={styles.actions}>
-        <Button type="submit" size="large" disabled={isSubmitting}>
+        <Button type="submit" size="large" disabled={isSubmitting || !turnstileToken}>
           Зареєструватися
         </Button>
         <p className={styles.helper}>
