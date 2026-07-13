@@ -20,7 +20,7 @@ export function Footer() {
             SpecWear
           </Link>
           <p>
-            Основа інтернет-магазину для спецодягу, спецвзуття та засобів
+            Інтернет-магазин спецодягу, спецвзуття та засобів
             індивідуального захисту з окремими сценаріями для роздрібних і
             оптових клієнтів.
           </p>
@@ -40,9 +40,9 @@ export function Footer() {
         <div className={styles.contactsColumn}>
           <p className={styles.label}>Контакти</p>
           <div className={styles.contactList}>
-            <p>sales@specwear.example</p>
-            <p>+380 (44) 000-00-00</p>
-            <p>Пн-Пт, 08:00-18:00</p>
+            <p>specwear111@gmail.com</p>
+            <p>+380 (97) 450-17-49</p>
+            <p>Пн-Пт, 09:00-19:00</p>
           </div>
         </div>
       </div>

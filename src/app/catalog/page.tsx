@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { findCategoryBySlug, getCategoryDescendantIds } from "@/lib/categories";
 import { CatalogToolbar } from "@/components/CatalogToolbar";
 import { FiltersSidebar } from "@/components/FiltersSidebar";
 import { getCategories } from "@/services/categories.service";
@@ -108,10 +109,29 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     sort,
   };
 
-  const [products, categories, variantFilters, filterPreviewData] = await Promise.all([
-    getProducts(selectedFilters),
-    getCategories(),
-    getAvailableVariantFilters(selectedFilters),
+  const categories = await getCategories();
+  const selectedCategory = selectedFilters.category
+    ? findCategoryBySlug(categories, selectedFilters.category)
+    : null;
+  const selectedCategoryDescendantIds = selectedCategory
+    ? getCategoryDescendantIds(categories, selectedCategory.id)
+    : [];
+  const selectedCategorySlugs =
+    selectedCategoryDescendantIds.length > 0
+      ? categories
+          .filter((category) => selectedCategoryDescendantIds.includes(category.id))
+          .map((category) => category.slug)
+      : selectedCategory?.slug
+        ? [selectedCategory.slug]
+        : [];
+  const categoryAwareFilters: ProductFilters = {
+    ...selectedFilters,
+    categorySlugs: selectedCategorySlugs,
+  };
+
+  const [products, variantFilters, filterPreviewData] = await Promise.all([
+    getProducts(categoryAwareFilters),
+    getAvailableVariantFilters(categoryAwareFilters),
     getProductFilterPreviewData(),
   ]);
   const productsCountLabel = getProductsCountLabel(products.length);

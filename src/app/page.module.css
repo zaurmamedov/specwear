@@ -335,6 +335,18 @@
   color: var(--color-accent);
 }
 
+.heroOutline {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--color-white);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.heroOutline:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .brandStrip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -1,14 +1,23 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
+import {
+  compressProductImage,
+  formatFileSize,
+  isSupportedProductImageType,
+  PRODUCT_IMAGE_ACCEPT,
+} from "@/lib/client-image-compression";
+import { buildCategoryOptions } from "@/lib/categories";
 import {
   getProductStatusDescription,
   type ProductStatus,
 } from "@/lib/product-status";
+import { DEFAULT_SLUG_PATTERN, slugifyLatin } from "@/lib/slugs";
 import type { Category } from "@/types/category";
 import type { Brand } from "@/types/product";
 
@@ -21,17 +30,15 @@ type AdminProductCreateFormProps = {
 
 type FormErrors = Partial<Record<string, string>>;
 
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+type BrandMode = "existing" | "new";
 
-function slugify(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-}
+type PendingUpload = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
+const MAX_UPLOAD_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 
 function toOptionalString(value: string) {
   const next = value.trim();
@@ -58,6 +65,9 @@ export function AdminProductCreateForm({
   brands,
 }: AdminProductCreateFormProps) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const pendingUploadsRef = useRef<PendingUpload[]>([]);
+  const categoryOptions = useMemo(() => buildCategoryOptions(categories), [categories]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
@@ -65,8 +75,14 @@ export function AdminProductCreateForm({
   const [shortDescription, setShortDescription] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [brandMode, setBrandMode] = useState<BrandMode>(
+    brands.length === 0 ? "new" : "existing"
+  );
   const [brandId, setBrandId] = useState("");
-  const [mainImageUrl, setMainImageUrl] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandSlug, setNewBrandSlug] = useState("");
+  const [newBrandSlugTouched, setNewBrandSlugTouched] = useState(false);
+  const [newBrandLogoUrl, setNewBrandLogoUrl] = useState("");
   const [status, setStatus] = useState<ProductStatus>("active");
   const [isFeatured, setIsFeatured] = useState(false);
   const [isNew, setIsNew] = useState(false);
@@ -84,19 +100,33 @@ export function AdminProductCreateForm({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isPreparing, setIsPreparing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
+  useEffect(() => {
+    pendingUploadsRef.current = pendingUploads;
+  }, [pendingUploads]);
+
+  useEffect(() => {
+    return () => {
+      pendingUploadsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
+
+  const hasUploadedFiles = pendingUploads.length > 0;
+
   function handleNameChange(value: string) {
     setName(value);
 
     if (!slugTouched) {
-      setSlug(slugify(value));
+      setSlug(slugifyLatin(value));
     }
   }
 
@@ -105,8 +135,85 @@ export function AdminProductCreateForm({
     setSlug(value);
   }
 
+  function handleNewBrandNameChange(value: string) {
+    setNewBrandName(value);
+
+    if (!newBrandSlugTouched) {
+      setNewBrandSlug(slugifyLatin(value));
+    }
+  }
+
+  function handleNewBrandSlugChange(value: string) {
+    setNewBrandSlugTouched(true);
+    setNewBrandSlug(value);
+  }
+
+  function removePendingUpload(id: string) {
+    setPendingUploads((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  async function prepareFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList);
+
+    if (files.length === 0) {
+      return;
+    }
+
+    setIsPreparing(true);
+    setFeedback(null);
+
+    const nextUploads: PendingUpload[] = [];
+
+    for (const file of files) {
+      if (!isSupportedProductImageType(file.type)) {
+        setFeedback({
+          type: "error",
+          message: `Файл ${file.name} має непідтримуваний формат.`,
+        });
+        continue;
+      }
+
+      if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+        setFeedback({
+          type: "error",
+          message: `Файл ${file.name} перевищує допустимий розмір 15 MB.`,
+        });
+        continue;
+      }
+
+      try {
+        const compressedFile = await compressProductImage(file);
+        nextUploads.push({
+          id: crypto.randomUUID(),
+          file: compressedFile,
+          previewUrl: URL.createObjectURL(compressedFile),
+        });
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : `Не вдалося підготувати ${file.name}.`,
+        });
+      }
+    }
+
+    setPendingUploads((current) => [...current, ...nextUploads]);
+    setIsPreparing(false);
+  }
+
   function validateForm() {
     const nextErrors: FormErrors = {};
+    const normalizedSlug = slug.trim();
+    const normalizedBrandSlug = newBrandSlug.trim();
     const retailPriceValue = Math.round(Number(retailPrice));
     const stockQuantityValue = Number.parseInt(stockQuantity, 10);
     const oldPriceValue = oldPrice.trim() ? Math.round(Number(oldPrice)) : null;
@@ -118,14 +225,29 @@ export function AdminProductCreateForm({
       nextErrors.name = "Вкажіть назву товару.";
     }
 
-    if (!slug.trim()) {
+    if (!normalizedSlug) {
       nextErrors.slug = "Вкажіть slug товару.";
-    } else if (!slugPattern.test(slug.trim())) {
+    } else if (!DEFAULT_SLUG_PATTERN.test(normalizedSlug)) {
       nextErrors.slug = "Slug повинен містити лише латиницю, цифри та дефіси.";
     }
 
     if (!categoryId) {
       nextErrors.category_id = "Оберіть категорію.";
+    }
+
+    if (brandMode === "existing") {
+      if (!brandId) {
+        nextErrors.brand_id = "Оберіть існуючий бренд.";
+      }
+    } else {
+      if (!newBrandName.trim()) {
+        nextErrors.new_brand_name = "Вкажіть назву бренду.";
+      }
+
+      if (normalizedBrandSlug && !DEFAULT_SLUG_PATTERN.test(normalizedBrandSlug)) {
+        nextErrors.new_brand_slug =
+          "Slug бренду повинен містити лише латиницю, цифри та дефіси.";
+      }
     }
 
     if (!Number.isFinite(retailPriceValue) || retailPriceValue <= 0) {
@@ -147,12 +269,42 @@ export function AdminProductCreateForm({
       nextErrors.wholesale_price = "Вкажіть коректну оптову ціну.";
     }
 
-    if (imageUrl.trim() && !Number.isFinite(Number(sortOrder))) {
+    if (!hasUploadedFiles && imageUrl.trim() && !Number.isFinite(Number(sortOrder))) {
       nextErrors.sort_order = "Вкажіть коректний порядок сортування.";
     }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
+  }
+
+  async function uploadImages(productId: string, productSlug: string, productName: string) {
+    const failures: string[] = [];
+
+    for (const item of pendingUploads) {
+      try {
+        const formData = new FormData();
+        formData.append("file", item.file);
+        formData.append("productSlug", productSlug);
+        formData.append("alt", imageAlt.trim() || productName);
+
+        const response = await fetch(`/api/admin/products/${productId}/images`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Не вдалося завантажити фото.");
+        }
+      } catch (error) {
+        failures.push(
+          error instanceof Error ? error.message : "Не вдалося завантажити фото."
+        );
+      }
+    }
+
+    return failures;
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -166,6 +318,8 @@ export function AdminProductCreateForm({
     setIsSaving(true);
 
     try {
+      const fallbackImageUrl = hasUploadedFiles ? null : toOptionalString(imageUrl);
+
       const response = await fetch("/api/admin/products", {
         method: "POST",
         headers: {
@@ -178,8 +332,17 @@ export function AdminProductCreateForm({
           short_description: toOptionalString(shortDescription),
           description: toOptionalString(description),
           category_id: categoryId,
-          brand_id: brandId || null,
-          main_image_url: toOptionalString(mainImageUrl),
+          brand_id: brandMode === "existing" ? brandId || null : null,
+          new_brand:
+            brandMode === "new"
+              ? {
+                  name: newBrandName.trim(),
+                  slug: toOptionalString(newBrandSlug),
+                  logo_url: toOptionalString(newBrandLogoUrl),
+                  is_active: true,
+                }
+              : null,
+          main_image_url: fallbackImageUrl,
           status,
           is_active: status !== "archived",
           is_featured: isFeatured,
@@ -196,9 +359,9 @@ export function AdminProductCreateForm({
             is_active: variantIsActive,
           },
           image: {
-            image_url: toOptionalString(imageUrl),
+            image_url: fallbackImageUrl,
             alt: toOptionalString(imageAlt),
-            sort_order: imageUrl.trim() ? toRequiredNumber(sortOrder) : null,
+            sort_order: fallbackImageUrl ? toRequiredNumber(sortOrder) : null,
           },
         }),
       });
@@ -209,12 +372,16 @@ export function AdminProductCreateForm({
         throw new Error(result.error ?? "Не вдалося створити товар.");
       }
 
-      setFeedback({
-        type: "success",
-        message: "Товар успішно створено",
-      });
+      const uploadFailures = hasUploadedFiles
+        ? await uploadImages(result.productId, slug.trim(), name.trim())
+        : [];
 
-      router.push(`/admin/products/${result.productId}/edit?created=1`);
+      const query = new URLSearchParams({ created: "1" });
+      if (uploadFailures.length > 0) {
+        query.set("imageUploadError", "1");
+      }
+
+      router.push(`/admin/products/${result.productId}/edit?${query.toString()}`);
     } catch (error) {
       setFeedback({
         type: "error",
@@ -234,7 +401,7 @@ export function AdminProductCreateForm({
         </Link>
         <p className={styles.eyebrow}>Admin</p>
         <h1>НОВИЙ ТОВАР</h1>
-        <p>Створіть товар, перший варіант і, за потреби, перше зображення.</p>
+        <p>Створіть товар, перший варіант, бренд і початкову галерею без переходу в Supabase.</p>
       </section>
 
       <form className={styles.form} onSubmit={handleSubmit}>
@@ -263,23 +430,15 @@ export function AdminProductCreateForm({
             </label>
 
             <label className={styles.field}>
-              <span>Головне зображення URL</span>
-              <input
-                value={mainImageUrl}
-                onChange={(event) => setMainImageUrl(event.target.value)}
-              />
-            </label>
-
-            <label className={styles.field}>
               <span>Категорія *</span>
               <select
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
               >
                 <option value="">Оберіть категорію</option>
-                {categories.map((category) => (
+                {categoryOptions.map(({ category, label }) => (
                   <option key={category.id} value={category.id}>
-                    {category.name}
+                    {label}
                   </option>
                 ))}
               </select>
@@ -288,17 +447,75 @@ export function AdminProductCreateForm({
               ) : null}
             </label>
 
-            <label className={styles.field}>
-              <span>Бренд</span>
-              <select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
-                <option value="">Без бренду</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className={`${styles.field} ${styles.fieldWide}`}>
+              <span>Бренд *</span>
+              <div className={styles.modeSwitch}>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${
+                    brandMode === "existing" ? styles.modeButtonActive : ""
+                  }`}
+                  onClick={() => setBrandMode("existing")}
+                >
+                  Обрати існуючий бренд
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${
+                    brandMode === "new" ? styles.modeButtonActive : ""
+                  }`}
+                  onClick={() => setBrandMode("new")}
+                >
+                  Додати новий бренд
+                </button>
+              </div>
+
+              {brandMode === "existing" ? (
+                <div className={styles.stack}>
+                  <select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
+                    <option value="">Оберіть бренд</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.brand_id ? <small className={styles.error}>{errors.brand_id}</small> : null}
+                </div>
+              ) : (
+                <div className={styles.grid}>
+                  <label className={styles.field}>
+                    <span>Назва бренду *</span>
+                    <input
+                      value={newBrandName}
+                      onChange={(event) => handleNewBrandNameChange(event.target.value)}
+                    />
+                    {errors.new_brand_name ? (
+                      <small className={styles.error}>{errors.new_brand_name}</small>
+                    ) : null}
+                  </label>
+
+                  <label className={styles.field}>
+                    <span>Slug бренду</span>
+                    <input
+                      value={newBrandSlug}
+                      onChange={(event) => handleNewBrandSlugChange(event.target.value)}
+                    />
+                    {errors.new_brand_slug ? (
+                      <small className={styles.error}>{errors.new_brand_slug}</small>
+                    ) : null}
+                  </label>
+
+                  <label className={`${styles.field} ${styles.fieldWide}`}>
+                    <span>Логотип бренду</span>
+                    <input
+                      value={newBrandLogoUrl}
+                      onChange={(event) => setNewBrandLogoUrl(event.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
 
             <label className={`${styles.field} ${styles.fieldWide}`}>
               <span>Короткий опис</span>
@@ -457,17 +674,97 @@ export function AdminProductCreateForm({
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
-            <h2>Перше зображення</h2>
-            <p>Необов’язково. Якщо URL пустий, запис у product_images не створюється.</p>
+            <h2>Зображення товару</h2>
+            <p>Завантажуйте фото до створення товару або використайте URL як резервний варіант.</p>
           </div>
+
+          <div className={styles.imageToolbar}>
+            <Button
+              type="button"
+              variant="secondary"
+              className={styles.secondaryButton}
+              onClick={() => inputRef.current?.click()}
+            >
+              Завантажити фото
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept={PRODUCT_IMAGE_ACCEPT}
+              multiple
+              className={styles.hiddenInput}
+              onChange={(event) => {
+                if (event.target.files) {
+                  void prepareFiles(event.target.files);
+                  event.target.value = "";
+                }
+              }}
+            />
+          </div>
+
+          <div
+            className={styles.dropzone}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (event.dataTransfer.files.length > 0) {
+                void prepareFiles(event.dataTransfer.files);
+              }
+            }}
+          >
+            <p>Перетягніть фото сюди</p>
+            <p className={styles.muted}>
+              Підтримуються JPG, JPEG, PNG та WEBP. Перед завантаженням фото автоматично
+              оптимізується.
+            </p>
+          </div>
+
+          {pendingUploads.length > 0 ? (
+            <div className={styles.uploadQueue}>
+              <div className={styles.cardHeader}>
+                <h3>Підготовлені фото</h3>
+                <p className={styles.muted}>
+                  {isPreparing ? "Оптимізуємо фото..." : "Перше фото стане головним."}
+                </p>
+              </div>
+              <div className={styles.imageGrid}>
+                {pendingUploads.map((item, index) => (
+                  <article key={item.id} className={styles.imageCard}>
+                    <div className={styles.imagePreview}>
+                      <Image
+                        src={item.previewUrl}
+                        alt="Попередній перегляд"
+                        fill
+                        sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 25vw"
+                        className={styles.imagePreviewMedia}
+                        unoptimized
+                      />
+                      {index === 0 ? <span className={styles.primaryBadge}>Головне</span> : null}
+                    </div>
+                    <div className={styles.imageMeta}>
+                      <span>{item.file.name}</span>
+                      <span>{formatFileSize(item.file.size)}</span>
+                    </div>
+                    <div className={styles.rowActions}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={styles.secondaryButton}
+                        onClick={() => removePendingUpload(item.id)}
+                      >
+                        Прибрати
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className={styles.grid}>
             <label className={`${styles.field} ${styles.fieldWide}`}>
-              <span>Image URL</span>
-              <input
-                value={imageUrl}
-                onChange={(event) => setImageUrl(event.target.value)}
-              />
+              <span>Або вставте URL зображення</span>
+              <input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
             </label>
 
             <label className={styles.field}>
@@ -476,7 +773,7 @@ export function AdminProductCreateForm({
             </label>
 
             <label className={styles.field}>
-              <span>Порядок сортування</span>
+              <span>Порядок сортування URL fallback</span>
               <input
                 type="number"
                 step="1"
@@ -487,6 +784,7 @@ export function AdminProductCreateForm({
                 <small className={styles.error}>{errors.sort_order}</small>
               ) : null}
             </label>
+
           </div>
         </section>
 
@@ -505,7 +803,7 @@ export function AdminProductCreateForm({
             <Button href="/admin/products" variant="outline" className={styles.secondaryButton}>
               До списку товарів
             </Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button type="submit" disabled={isSaving || isPreparing}>
               {isSaving ? "Створюємо..." : "Створити товар"}
             </Button>
           </div>

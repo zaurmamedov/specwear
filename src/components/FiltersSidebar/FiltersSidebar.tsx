@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { buildCategoryTree } from "@/lib/categories";
 import type {
   AvailabilityFilter,
   ProductFilterPreviewItem,
 } from "@/services/products.service";
-import type { Category } from "@/types/category";
+import type { Category, CategoryTreeNode } from "@/types/category";
 
 import styles from "./FiltersSidebar.module.css";
 
@@ -71,7 +72,7 @@ function getAvailableOptions(
     if (
       omitGroup !== "category" &&
       nextFilters.category &&
-      item.categorySlug !== nextFilters.category
+      !item.categorySlugs.includes(nextFilters.category)
     ) {
       return false;
     }
@@ -178,6 +179,7 @@ export function FiltersSidebar({
     availability: false,
   });
   const [draftFilters, setDraftFilters] = useState<CatalogFilters>(selectedFilters);
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
   useEffect(() => {
     if (!isDrawerOpen) {
@@ -196,6 +198,54 @@ export function FiltersSidebar({
     () => getAvailableOptions(filterPreviewData, draftFilters),
     [draftFilters, filterPreviewData]
   );
+  const availableCategorySlugs = useMemo(() => {
+    function matchesWithoutCategory(item: ProductFilterPreviewItem) {
+      if (
+        draftFilters.brand.length > 0 &&
+        (!item.brandSlug || !draftFilters.brand.includes(item.brandSlug))
+      ) {
+        return false;
+      }
+
+      if (
+        draftFilters.size.length > 0 &&
+        !draftFilters.size.some((size) => item.sizes.includes(size))
+      ) {
+        return false;
+      }
+
+      if (
+        draftFilters.color.length > 0 &&
+        !draftFilters.color.some((color) => item.colors.includes(color))
+      ) {
+        return false;
+      }
+
+      if (draftFilters.availability.length === 1) {
+        if (draftFilters.availability[0] === "in_stock" && !item.inStock) {
+          return false;
+        }
+
+        if (draftFilters.availability[0] === "out_of_stock" && item.inStock) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    return new Set(
+      filterPreviewData
+        .filter((item) => matchesWithoutCategory(item))
+        .flatMap((item) => item.categorySlugs)
+    );
+  }, [
+    draftFilters.availability,
+    draftFilters.brand,
+    draftFilters.color,
+    draftFilters.size,
+    filterPreviewData,
+  ]);
 
   const filteredBrands = useMemo(() => {
     const query = brandSearch.trim().toLowerCase();
@@ -211,9 +261,48 @@ export function FiltersSidebar({
 
   function sanitizeDraftFilters(filters: CatalogFilters): CatalogFilters {
     const nextOptions = getAvailableOptions(filterPreviewData, filters);
+    const nextVisibleCategorySlugs = new Set(
+      filterPreviewData
+        .filter((item) => {
+          if (
+            filters.brand.length > 0 &&
+            (!item.brandSlug || !filters.brand.includes(item.brandSlug))
+          ) {
+            return false;
+          }
+
+          if (filters.size.length > 0 && !filters.size.some((size) => item.sizes.includes(size))) {
+            return false;
+          }
+
+          if (
+            filters.color.length > 0 &&
+            !filters.color.some((color) => item.colors.includes(color))
+          ) {
+            return false;
+          }
+
+          if (filters.availability.length === 1) {
+            if (filters.availability[0] === "in_stock" && !item.inStock) {
+              return false;
+            }
+
+            if (filters.availability[0] === "out_of_stock" && item.inStock) {
+              return false;
+            }
+          }
+
+          return true;
+        })
+        .flatMap((item) => item.categorySlugs)
+    );
 
     return {
       ...filters,
+      category:
+        filters.category && !nextVisibleCategorySlugs.has(filters.category)
+          ? null
+          : filters.category,
       brand: filters.brand.filter((value) =>
         nextOptions.brands.some((brand) => brand.slug === value)
       ),
@@ -285,6 +374,38 @@ export function FiltersSidebar({
   const colorCount = availableOptions.colors.length;
   const availabilityCount = availableOptions.availability.length;
 
+  function renderCategoryBranch(items: CategoryTreeNode[], depth = 0): React.ReactNode {
+    return items
+      .filter((category) => availableCategorySlugs.has(category.slug))
+      .map((category) => {
+        const isActive = draftFilters.category === category.slug;
+
+        return (
+          <div key={category.id} className={styles.categoryNode}>
+            <button
+              type="button"
+              className={`${styles.optionButton} ${styles.categoryButton} ${
+                isActive ? styles.optionButtonActive : ""
+              }`}
+              onClick={() => updateCategory(category.slug)}
+              style={{ paddingInlineStart: `${0.85 + depth * 1.1}rem` }}
+            >
+              <span className={styles.categoryButtonInner}>
+                {depth > 0 ? <span className={styles.categoryDash}>—</span> : null}
+                <span>{category.name}</span>
+              </span>
+            </button>
+
+            {category.children.length > 0 ? (
+              <div className={styles.categoryChildren}>
+                {renderCategoryBranch(category.children, depth + 1)}
+              </div>
+            ) : null}
+          </div>
+        );
+      });
+  }
+
   const renderedPanel = (
     <div className={styles.panel}>
       <section className={styles.group}>
@@ -300,24 +421,7 @@ export function FiltersSidebar({
 
         {openGroups.category ? (
           <div className={styles.groupBody}>
-            <div className={styles.optionList}>
-              {categories.map((category) => {
-                const isActive = draftFilters.category === category.slug;
-
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`${styles.optionButton} ${
-                      isActive ? styles.optionButtonActive : ""
-                    }`}
-                    onClick={() => updateCategory(category.slug)}
-                  >
-                    {category.name}
-                  </button>
-                );
-              })}
-            </div>
+            <div className={styles.categoryTree}>{renderCategoryBranch(categoryTree)}</div>
 
             {draftFilters.category ? (
               <button

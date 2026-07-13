@@ -303,6 +303,10 @@
   border-radius: var(--radius-md);
   color: var(--color-white);
   background: rgba(255, 255, 255, 0.04);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .menuLine {
@@ -311,6 +315,9 @@
   height: 0.1rem;
   border-radius: var(--radius-pill);
   background: currentColor;
+  transition:
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .mobileMenu {
@@ -419,11 +426,24 @@
   .mobileMenuHeader {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: var(--space-md);
     width: min(100%, var(--container-width));
     margin: 0 auto;
     padding: 0 0 var(--space-md);
+  }
+
+  .mobileBrand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+    font-family: var(--font-heading), sans-serif;
+    font-size: clamp(1.1rem, 1vw + 0.95rem, 1.35rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-white);
   }
 
   .closeButton {
@@ -494,6 +514,24 @@
     vertical-align: middle;
     background: var(--color-accent);
   }
+}
+
+.menuButtonActive {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: rgba(249, 115, 22, 0.12);
+  color: var(--color-accent);
+}
+
+.menuButtonActive .menuLine:nth-child(1) {
+  transform: translateY(0.36rem) rotate(45deg);
+}
+
+.menuButtonActive .menuLine:nth-child(2) {
+  opacity: 0;
+}
+
+.menuButtonActive .menuLine:nth-child(3) {
+  transform: translateY(-0.36rem) rotate(-45deg);
 }
 
 @media (min-width: 960px) and (max-width: 1099px) {

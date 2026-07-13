@@ -65,14 +65,15 @@
 }
 
 .outline {
-  border-color: rgba(255, 255, 255, 0.35);
-  color: var(--color-white);
-  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(17, 19, 21, 0.16);
+  color: var(--color-dark);
+  background: rgba(17, 19, 21, 0.02);
 }
 
 .outline:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+  background: rgba(249, 115, 22, 0.06);
 }
 
 @media (max-width: 479px) {

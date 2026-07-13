@@ -3,11 +3,10 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
+import { DEFAULT_SLUG_PATTERN, slugifyLatin } from "@/lib/slugs";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { createAdminProduct } from "@/services/admin-products.service";
 import type { AdminProductCreateInput } from "@/types/admin-product";
-
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -50,6 +49,10 @@ export async function POST(request: Request) {
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
+    const brandId = normalizeOptionalText(body.brand_id);
+    const newBrandName = normalizeText(body.new_brand?.name);
+    const newBrandSlugSource = normalizeOptionalText(body.new_brand?.slug) ?? newBrandName;
+    const newBrandSlug = newBrandSlugSource ? slugifyLatin(newBrandSlugSource) : null;
     const status = normalizeText(body.status) as ProductStatus;
     const retailPrice = normalizeInteger(body.variant?.retail_price, Number.NaN);
     const stockQuantity = normalizeInteger(body.variant?.stock_quantity, Number.NaN);
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!slug || !slugPattern.test(slug)) {
+    if (!slug || !DEFAULT_SLUG_PATTERN.test(slug)) {
       return NextResponse.json(
         { error: "Slug повинен містити лише латиницю, цифри та дефіси." },
         { status: 400 }
@@ -96,6 +99,27 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!brandId && !newBrandName) {
+      return NextResponse.json(
+        { error: "Оберіть існуючий бренд або додайте новий." },
+        { status: 400 }
+      );
+    }
+
+    if (newBrandName && !newBrandSlug) {
+      return NextResponse.json(
+        { error: "Вкажіть коректний slug бренду." },
+        { status: 400 }
+      );
+    }
+
+    if (newBrandSlug && !DEFAULT_SLUG_PATTERN.test(newBrandSlug)) {
+      return NextResponse.json(
+        { error: "Slug бренду повинен містити лише латиницю, цифри та дефіси." },
+        { status: 400 }
+      );
+    }
+
     const payload: AdminProductCreateInput = {
       name,
       slug,
@@ -103,7 +127,15 @@ export async function POST(request: Request) {
       short_description: normalizeOptionalText(body.short_description),
       description: normalizeOptionalText(body.description),
       category_id: categoryId,
-      brand_id: normalizeOptionalText(body.brand_id),
+      brand_id: brandId,
+      new_brand: newBrandName
+        ? {
+            name: newBrandName,
+            slug: newBrandSlug,
+            logo_url: normalizeOptionalText(body.new_brand?.logo_url),
+            is_active: body.new_brand?.is_active ?? true,
+          }
+        : null,
       main_image_url: normalizeOptionalText(body.main_image_url),
       status,
       is_active: status !== "archived",

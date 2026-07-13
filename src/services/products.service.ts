@@ -1,17 +1,20 @@
 import { cache } from "react";
 
+import { getCategoryPath } from "@/lib/categories";
 import {
   isPubliclyVisibleProductStatus,
   isProductPurchasableStatus,
   isProductUnavailableStatus,
 } from "@/lib/product-status";
 import { supabase } from "@/lib/supabase/client";
+import { getCategories } from "@/services/categories.service";
 import type { ProductCardData } from "@/types/product";
 
 export type AvailabilityFilter = "in_stock" | "out_of_stock";
 
 export type ProductFilters = {
   category?: string | null;
+  categorySlugs?: string[] | null;
   brand?: string[] | null;
   size?: string[] | null;
   color?: string[] | null;
@@ -28,7 +31,9 @@ export type VariantFilterOptions = {
 };
 
 export type ProductFilterPreviewItem = {
+  categoryId: string | null;
   categorySlug: string | null;
+  categorySlugs: string[];
   brandSlug: string | null;
   brandName: string | null;
   sizes: string[];
@@ -244,7 +249,17 @@ function matchesAvailability(
 
 function filterProducts(products: ProductCardData[], filters?: ProductFilters) {
   return products.filter((product) => {
-    if (filters?.category && product.category?.slug !== filters.category) {
+    const allowedCategorySlugs =
+      filters?.categorySlugs?.length
+        ? filters.categorySlugs
+        : filters?.category
+          ? [filters.category]
+          : [];
+
+    if (
+      allowedCategorySlugs.length > 0 &&
+      (!product.category?.slug || !allowedCategorySlugs.includes(product.category.slug))
+    ) {
       return false;
     }
 
@@ -426,9 +441,16 @@ export async function getAvailableVariantFilters(
 
 export async function getProductFilterPreviewData(): Promise<ProductFilterPreviewItem[]> {
   const products = await getCatalogProductsDataset();
+  const categories = await getCategories();
 
   return products.map((product) => ({
+    categoryId: product.category_id ?? null,
     categorySlug: product.category?.slug ?? null,
+    categorySlugs: product.category_id
+      ? getCategoryPath(categories, product.category_id).map((category) => category.slug)
+      : product.category?.slug
+        ? [product.category.slug]
+        : [],
     brandSlug: product.brand?.slug ?? null,
     brandName: product.brand?.name ?? null,
     sizes: Array.from(

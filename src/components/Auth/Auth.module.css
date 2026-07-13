@@ -57,6 +57,21 @@
   color: #b91c1c;
 }
 
+.successBlock {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(22, 163, 74, 0.12);
+}
+
+.success {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: #15803d;
+  font-weight: 600;
+}
+
 .warning {
   margin: 0;
   padding: 0.85rem 1rem;

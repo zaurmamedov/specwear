@@ -39,6 +39,7 @@ export function CustomerRegisterForm({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
@@ -78,16 +79,19 @@ export function CustomerRegisterForm({
         event.preventDefault();
 
         if (validationError) {
+          setSubmitSuccess(null);
           setSubmitError(validationError);
           return;
         }
 
         if (!turnstileToken) {
+          setSubmitSuccess(null);
           setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
           return;
         }
 
         setSubmitError(null);
+        setSubmitSuccess(null);
         setIsSubmitting(true);
 
         try {
@@ -106,10 +110,25 @@ export function CustomerRegisterForm({
             }),
           });
 
-          const payload = (await response.json()) as { error?: string };
+          const payload = (await response.json()) as {
+            error?: string;
+            ok?: boolean;
+            requiresEmailConfirmation?: boolean;
+            message?: string;
+          };
 
           if (!response.ok) {
             throw new Error(payload.error ?? "Не вдалося створити акаунт.");
+          }
+
+          if (payload.requiresEmailConfirmation) {
+            setSubmitSuccess(
+              payload.message ??
+                "Ми надіслали лист для підтвердження реєстрації. Перевірте вашу пошту."
+            );
+            setTurnstileToken(null);
+            turnstileRef.current?.reset();
+            return;
           }
 
           router.push(redirectTo || "/account");
@@ -231,6 +250,20 @@ export function CustomerRegisterForm({
       />
 
       {submitError ? <p className={styles.error}>{submitError}</p> : null}
+      {submitSuccess ? (
+        <div className={styles.successBlock}>
+          <p className={styles.success}>{submitSuccess}</p>
+          <p className={styles.helper}>
+            Після підтвердження email ви зможете{" "}
+            <Link
+              href={`/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`}
+            >
+              увійти в акаунт
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
 
       <div className={styles.actions}>
         <Button type="submit" size="large" disabled={isSubmitting || !turnstileToken}>

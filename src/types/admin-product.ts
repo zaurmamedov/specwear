@@ -124,6 +124,12 @@ export type AdminProductCreateInput = {
   description: string | null;
   category_id: string;
   brand_id: string | null;
+  new_brand?: {
+    name: string;
+    slug: string | null;
+    logo_url: string | null;
+    is_active: boolean;
+  } | null;
   main_image_url: string | null;
   status: ProductStatus;
   is_active: boolean;

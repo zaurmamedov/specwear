@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { BackButton } from "@/components/BackButton";
 import { isValidImageUrl } from "@/lib/images";
+import type { Category } from "@/types/category";
 import type { ProductCardData, ProductImage } from "@/types/product";
 
 import { ProductDetailsActions } from "./ProductDetailsActions";
@@ -10,6 +11,7 @@ import styles from "./ProductDetails.module.css";
 
 type ProductDetailsProps = {
   product: ProductCardData;
+  categoryPath?: Category[];
 };
 
 function getGalleryImages(product: ProductCardData): ProductImage[] {
@@ -39,9 +41,10 @@ function getGalleryImages(product: ProductCardData): ProductImage[] {
   return [];
 }
 
-export function ProductDetails({ product }: ProductDetailsProps) {
+export function ProductDetails({ product, categoryPath = [] }: ProductDetailsProps) {
   const galleryImages = getGalleryImages(product);
   const primaryImage = galleryImages[0] ?? null;
+  const visiblePath = categoryPath.length > 0 ? categoryPath : product.category ? [product.category] : [];
 
   return (
     <main className={styles.page}>
@@ -51,15 +54,13 @@ export function ProductDetails({ product }: ProductDetailsProps) {
           <Link href="/">Головна</Link>
           <span>/</span>
           <Link href="/catalog">Каталог</Link>
-          <span>/</span>
-          {product.category ? (
-            <>
-              <Link href={`/catalog?category=${product.category.slug}`}>
-                {product.category.name}
-              </Link>
+          {visiblePath.map((category) => (
+            <span key={category.id ?? category.slug}>
               <span>/</span>
-            </>
-          ) : null}
+              <Link href={`/catalog?category=${category.slug}`}>{category.name}</Link>
+            </span>
+          ))}
+          <span>/</span>
           <span className={styles.currentCrumb}>{product.name}</span>
         </nav>
       </div>

@@ -51,6 +51,37 @@ export function Header() {
     };
   }, [isMenuOpen]);
 
+  useEffect(() => {
+    const closeId = window.setTimeout(() => {
+      setIsMenuOpen(false);
+      setIsSearchOpen(false);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(closeId);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 960px)");
+
+    function handleViewportChange(event: MediaQueryListEvent | MediaQueryList) {
+      if (event.matches) {
+        setIsMenuOpen(false);
+        setIsSearchOpen(false);
+      }
+    }
+
+    handleViewportChange(mediaQuery);
+
+    const listener = (event: MediaQueryListEvent) => handleViewportChange(event);
+    mediaQuery.addEventListener("change", listener);
+
+    return () => {
+      mediaQuery.removeEventListener("change", listener);
+    };
+  }, []);
+
   const isActiveLink = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -83,7 +114,7 @@ export function Header() {
 
         <button
           type="button"
-          className={styles.menuButton}
+          className={`${styles.menuButton} ${isMenuOpen ? styles.menuButtonActive : ""}`}
           aria-expanded={isMenuOpen}
           aria-controls="mobile-navigation"
           aria-label={isMenuOpen ? "Закрити меню" : "Відкрити меню"}
@@ -127,6 +158,10 @@ export function Header() {
         aria-hidden={!isMenuOpen}
       >
         <div className={styles.mobileMenuHeader}>
+          <Link href="/" className={styles.mobileBrand} onClick={() => setIsMenuOpen(false)}>
+            <span className={styles.brandMark} />
+            <span>SpecWear</span>
+          </Link>
           <button
             type="button"
             className={styles.closeButton}

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { AdminProductImagesSection } from "@/components/AdminProductEdit/AdminProductImagesSection";
 import { AdminProductVariantsSection } from "@/components/AdminProductEdit/AdminProductVariantsSection";
+import { buildCategoryOptions } from "@/lib/categories";
 import {
   getProductStatusDescription,
   type ProductStatus,
@@ -43,6 +44,7 @@ export function AdminProductEditForm({
   initialSuccessMessage,
 }: AdminProductEditFormProps) {
   const router = useRouter();
+  const categoryOptions = useMemo(() => buildCategoryOptions(categories), [categories]);
   const [name, setName] = useState(product.name);
   const [slug, setSlug] = useState(product.slug);
   const [model, setModel] = useState(product.model ?? "");
@@ -199,9 +201,9 @@ export function AdminProductEditForm({
                 onChange={(event) => setCategoryId(event.target.value)}
               >
                 <option value="">Оберіть категорію</option>
-                {categories.map((category) => (
+                {categoryOptions.map(({ category, label }) => (
                   <option key={category.id} value={category.id}>
-                    {category.name}
+                    {label}
                   </option>
                 ))}
               </select>

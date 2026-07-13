@@ -1,6 +1,8 @@
 import "server-only";
 
+import { getCategoryDescendantIds, normalizeCategory } from "@/lib/categories";
 import { normalizeProductStatus } from "@/lib/product-status";
+import { slugifyLatin } from "@/lib/slugs";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Category } from "@/types/category";
 import type { Brand } from "@/types/product";
@@ -32,6 +34,11 @@ function toOptionalInteger(value: number | null) {
   }
 
   return Math.round(value);
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const next = value?.trim() ?? "";
+  return next ? next : null;
 }
 
 function normalizeProducts(products: AdminProductListItem[] | null | undefined) {
@@ -230,7 +237,17 @@ export async function getAdminProducts(
   let products = normalizeProducts((data ?? []) as unknown as AdminProductListItem[]);
 
   if (filters.category) {
-    products = products.filter((product) => product.category?.slug === filters.category);
+    const categories = await getAdminProductCategories();
+    const selectedCategory = categories.find((category) => category.slug === filters.category);
+    const descendantIds = selectedCategory
+      ? new Set(getCategoryDescendantIds(categories, selectedCategory.id))
+      : null;
+
+    products = products.filter((product) =>
+      descendantIds && product.category?.id
+        ? descendantIds.has(product.category.id)
+        : product.category?.slug === filters.category
+    );
   }
 
   if (filters.status) {
@@ -258,7 +275,7 @@ export async function getAdminProductCategories(): Promise<Category[]> {
     throw new Error(`Failed to fetch admin categories: ${error.message}`);
   }
 
-  return (data ?? []) as Category[];
+  return ((data ?? []) as Category[]).map(normalizeCategory);
 }
 
 export async function getAdminProductBrands(): Promise<Brand[]> {
@@ -273,6 +290,84 @@ export async function getAdminProductBrands(): Promise<Brand[]> {
   }
 
   return (data ?? []) as Brand[];
+}
+
+async function resolveAdminBrandId(
+  input:
+    | {
+        brand_id: string | null;
+        new_brand?: AdminProductCreateInput["new_brand"];
+      }
+    | AdminProductCreateInput
+) {
+  if (input.brand_id) {
+    return input.brand_id;
+  }
+
+  const newBrand = input.new_brand;
+
+  if (!newBrand?.name?.trim()) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseAdminClient();
+  const brandName = newBrand.name.trim();
+  const brandSlug = normalizeOptionalText(newBrand.slug)
+    ? slugifyLatin(newBrand.slug ?? "")
+    : slugifyLatin(brandName);
+  const logoUrl = normalizeOptionalText(newBrand.logo_url);
+
+  if (!brandSlug) {
+    throw new Error("Не вдалося згенерувати slug для бренду.");
+  }
+
+  const { data: existingBrand, error: existingBrandError } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("slug", brandSlug)
+    .maybeSingle();
+
+  if (existingBrandError) {
+    throw new Error(`Failed to fetch brand: ${existingBrandError.message}`);
+  }
+
+  if (existingBrand?.id) {
+    return existingBrand.id;
+  }
+
+  const brandId = crypto.randomUUID();
+  const { error: brandError } = await supabase.from("brands").insert({
+    id: brandId,
+    name: brandName,
+    slug: brandSlug,
+    logo_url: logoUrl,
+    is_active: newBrand.is_active ?? true,
+  });
+
+  if (!brandError) {
+    return brandId;
+  }
+
+  if (
+    brandError.message.toLowerCase().includes("duplicate") ||
+    brandError.message.toLowerCase().includes("unique")
+  ) {
+    const { data: duplicateBrand, error: duplicateFetchError } = await supabase
+      .from("brands")
+      .select("id")
+      .eq("slug", brandSlug)
+      .maybeSingle();
+
+    if (duplicateFetchError) {
+      throw new Error(`Failed to resolve duplicate brand: ${duplicateFetchError.message}`);
+    }
+
+    if (duplicateBrand?.id) {
+      return duplicateBrand.id;
+    }
+  }
+
+  throw new Error(`Failed to create brand: ${brandError.message}`);
 }
 
 export async function getAdminProductById(
@@ -567,6 +662,7 @@ export async function createAdminProduct(
   const timestamp = new Date().toISOString();
   const productId = crypto.randomUUID();
   const variantId = crypto.randomUUID();
+  const resolvedBrandId = await resolveAdminBrandId(input);
 
   const { error: productError } = await supabase.from("products").insert({
     id: productId,
@@ -576,7 +672,7 @@ export async function createAdminProduct(
     short_description: input.short_description,
     description: input.description,
     category_id: input.category_id,
-    brand_id: input.brand_id,
+    brand_id: resolvedBrandId,
     main_image_url: input.main_image_url ?? input.image.image_url ?? null,
     status: input.status,
     is_active: input.status !== "archived",

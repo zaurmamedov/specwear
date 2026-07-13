@@ -82,6 +82,33 @@
   gap: 0.6rem;
 }
 
+.categoryTree,
+.categoryChildren {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.categoryNode {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.categoryButton {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.categoryButtonInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.categoryDash {
+  color: var(--color-muted);
+}
+
 .optionButton,
 .checkboxOption {
   display: inline-flex;

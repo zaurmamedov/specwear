@@ -1,0 +1,231 @@
+.page {
+  width: min(100% - (var(--container-gutter) * 2), var(--container-width));
+  margin: 0 auto;
+  padding: var(--space-3xl) 0;
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.hero,
+.createSection,
+.treeSection {
+  display: grid;
+  gap: var(--space-md);
+  padding: clamp(1.1rem, 2vw, 1.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.eyebrow {
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.feedback {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+}
+
+.feedbackSuccess {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.feedbackError {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.form,
+.editPanel {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field span {
+  color: var(--color-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(17, 19, 21, 0.02);
+  color: var(--color-dark);
+  font: inherit;
+}
+
+.checkboxField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3rem;
+}
+
+.checkboxField input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-accent);
+}
+
+.formActions,
+.rowActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(17, 19, 21, 0.02);
+  color: var(--color-dark);
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.secondaryButton:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.treeWrap {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.rowGroup {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.categoryRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-md);
+  align-items: start;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(17, 19, 21, 0.02);
+}
+
+.categoryRowMuted {
+  opacity: 0.82;
+}
+
+.categoryMain {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.categoryTitleRow {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.metaList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statusActive {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.statusInactive {
+  background: rgba(100, 116, 139, 0.14);
+  color: #475569;
+}
+
+.editPanel {
+  padding: 1rem;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 22, 0.04);
+}
+
+@media (max-width: 899px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .categoryRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 479px) {
+  .page {
+    padding: var(--space-2xl) 0;
+  }
+
+  .formActions,
+  .rowActions {
+    flex-direction: column;
+  }
+
+  .secondaryButton {
+    width: 100%;
+  }
+}

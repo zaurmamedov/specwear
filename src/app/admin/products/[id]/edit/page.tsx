@@ -9,7 +9,7 @@ import {
 
 type AdminProductEditPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string | string[] }>;
+  searchParams: Promise<{ created?: string | string[]; imageUploadError?: string | string[] }>;
 };
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,9 @@ export default async function AdminProductEditPage({
   const { id } = await params;
   const query = await searchParams;
   const created = Array.isArray(query.created) ? query.created[0] : query.created;
+  const imageUploadError = Array.isArray(query.imageUploadError)
+    ? query.imageUploadError[0]
+    : query.imageUploadError;
   const [product, categories, brands] = await Promise.all([
     getAdminProductById(id),
     getAdminProductCategories(),
@@ -36,7 +39,13 @@ export default async function AdminProductEditPage({
       product={product}
       categories={categories}
       brands={brands}
-      initialSuccessMessage={created === "1" ? "Товар успішно створено" : null}
+      initialSuccessMessage={
+        imageUploadError === "1"
+          ? "Товар створено, але частину фото не вдалося завантажити. Завершіть галерею нижче."
+          : created === "1"
+            ? "Товар успішно створено"
+            : null
+      }
     />
   );
 }

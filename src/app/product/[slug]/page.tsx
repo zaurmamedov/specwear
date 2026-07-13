@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ProductDetails } from "@/components/ProductDetails/ProductDetails";
+import { getCategoryPath } from "@/lib/categories";
+import { getCategories } from "@/services/categories.service";
 import { getProductBySlug } from "@/services/products.service";
 
 type ProductPageProps = {
@@ -28,11 +30,15 @@ export async function generateMetadata({
 
 export default async function ProductSlugPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const [product, categories] = await Promise.all([getProductBySlug(slug), getCategories()]);
 
   if (!product) {
     notFound();
   }
 
-  return <ProductDetails product={product} />;
+  const categoryPath = product.category_id
+    ? getCategoryPath(categories, product.category_id)
+    : [];
+
+  return <ProductDetails product={product} categoryPath={categoryPath} />;
 }

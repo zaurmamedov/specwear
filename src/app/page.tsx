@@ -59,6 +59,11 @@ const categoryContent = {
     image: "/home/category-ppe.webp",
     description: "Окуляри, рукавички, респіратори, каски та інші засоби для безпечної роботи.",
   },
+  "instrumenty-ta-vytratni-materialy": {
+    title: "Інструменти та витратні матеріали",
+    image: "/home/category-workwear.webp",
+    description: "Електроди, диски, круги та зварювальні витратні матеріали для щоденної роботи.",
+  },
 } satisfies Record<string, Omit<HomeCategoryCard, "href">>;
 
 function findCategory(categories: Category[], matcher: (category: Category) => boolean) {
@@ -73,8 +78,12 @@ function getHomeCategories(categories: Category[]): HomeCategoryCard[] {
     findCategory(categories, (category) =>
       category.name.toLowerCase().includes("індивідуального захисту")
     );
+  const tools = findCategory(
+    categories,
+    (category) => category.slug === "instrumenty-ta-vytratni-materialy"
+  );
 
-  return [workwear, footwear, ppe]
+  return [workwear, footwear, ppe, tools]
     .filter((category): category is Category => Boolean(category))
     .map((category) => {
       const content =
@@ -160,7 +169,12 @@ export default async function HomePage() {
                 <Button href="/catalog" size="large">
                   Перейти в каталог
                 </Button>
-                <Button href="/contacts" variant="outline" size="large">
+                <Button
+                  href="/contacts"
+                  variant="outline"
+                  size="large"
+                  className={styles.heroOutline}
+                >
                   Отримати консультацію
                 </Button>
               </div>

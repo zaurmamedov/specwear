@@ -11,6 +11,7 @@ export function AdminHeader({ adminEmail }: { adminEmail: string | null | undefi
   const pathname = usePathname();
   const isOrdersActive = pathname.startsWith("/admin/orders");
   const isProductsActive = pathname.startsWith("/admin/products");
+  const isCategoriesActive = pathname.startsWith("/admin/categories");
 
   return (
     <header className={styles.header}>
@@ -32,6 +33,12 @@ export function AdminHeader({ adminEmail }: { adminEmail: string | null | undefi
             className={`${styles.navLink} ${isProductsActive ? styles.navLinkActive : ""}`}
           >
             Товари
+          </Link>
+          <Link
+            href="/admin/categories"
+            className={`${styles.navLink} ${isCategoriesActive ? styles.navLinkActive : ""}`}
+          >
+            Категорії
           </Link>
         </nav>
 

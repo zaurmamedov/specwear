@@ -10,6 +10,55 @@ import { upsertProfileForUser } from "@/services/account.service";
 
 const SUPABASE_CAPTCHA_FAILURE_MESSAGE =
   "Не вдалося пройти перевірку безпеки. Оновіть сторінку і спробуйте ще раз.";
+const EMAIL_CONFIRMATION_MESSAGE =
+  "Ми надіслали лист для підтвердження реєстрації. Перевірте вашу пошту.";
+
+function logRegisterDev(message: string, payload: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  console.log(message, payload);
+}
+
+function mapRegisterError(message: string | undefined) {
+  const normalizedMessage = message?.toLowerCase() ?? "";
+
+  if (isSupabaseCaptchaError(message)) {
+    return SUPABASE_CAPTCHA_FAILURE_MESSAGE;
+  }
+
+  if (
+    normalizedMessage.includes("rate limit") ||
+    normalizedMessage.includes("too many requests") ||
+    normalizedMessage.includes("email rate limit")
+  ) {
+    return "Перевищено ліміт відправки листів. Спробуйте пізніше.";
+  }
+
+  if (
+    normalizedMessage.includes("already registered") ||
+    normalizedMessage.includes("user already registered") ||
+    normalizedMessage.includes("already been registered")
+  ) {
+    return "Користувач із таким email уже існує.";
+  }
+
+  if (normalizedMessage.includes("password")) {
+    return "Пароль має містити щонайменше 8 символів.";
+  }
+
+  if (
+    normalizedMessage.includes("invalid email") ||
+    normalizedMessage.includes("email address is invalid") ||
+    normalizedMessage.includes("unable to validate email address") ||
+    normalizedMessage.includes("email is invalid")
+  ) {
+    return "Введіть коректний email.";
+  }
+
+  return "Не вдалося створити акаунт. Спробуйте ще раз.";
+}
 
 function validatePhone(phone: string) {
   return /^\+380\d{9}$/.test(phone.trim());
@@ -43,9 +92,18 @@ export async function POST(request: Request) {
     const firstName = body.firstName?.trim() ?? "";
     const lastName = body.lastName?.trim() ?? "";
     const phone = body.phone?.trim() ?? "";
-    const email = body.email?.trim() ?? "";
+    const submittedEmail = body.email ?? "";
+    const email = submittedEmail.trim();
+    const normalizedEmail = email.toLowerCase();
     const password = body.password ?? "";
     const turnstileToken = body.turnstileToken?.trim() ?? "";
+    const isEmailValid = validateEmail(normalizedEmail);
+
+    logRegisterDev("Register request validation", {
+      submittedEmail,
+      normalizedEmail,
+      emailRegexValid: isEmailValid,
+    });
 
     if (!turnstileToken) {
       return NextResponse.json({ error: TURNSTILE_FAILURE_MESSAGE }, { status: 400 });
@@ -66,7 +124,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!validateEmail(email)) {
+    if (!isEmailValid) {
       return NextResponse.json({ error: "Введіть коректний email" }, { status: 400 });
     }
 
@@ -79,7 +137,7 @@ export async function POST(request: Request) {
 
     const supabase = createServerSupabaseCustomerAuthClient();
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         captchaToken: turnstileToken,
@@ -91,84 +149,142 @@ export async function POST(request: Request) {
       },
     });
 
+    logRegisterDev("Register signUp result", {
+      signUpSuccess: !error && Boolean(data.user),
+      hasUser: Boolean(data.user),
+      hasSession: Boolean(data.session),
+      submittedEmail,
+      normalizedEmail,
+      emailRegexValid: isEmailValid,
+      signUpErrorMessage: error?.message ?? null,
+      signUpErrorCode: "code" in (error ?? {}) ? (error as { code?: string }).code ?? null : null,
+      signUpErrorStatus:
+        "status" in (error ?? {}) ? (error as { status?: number }).status ?? null : null,
+    });
+
     if (error || !data.user) {
-      if (isSupabaseCaptchaError(error?.message)) {
-        return NextResponse.json(
-          { error: SUPABASE_CAPTCHA_FAILURE_MESSAGE },
-          { status: 400 }
-        );
-      }
-
-      return NextResponse.json(
-        { error: error?.message ?? "Не вдалося створити акаунт." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: mapRegisterError(error?.message) }, { status: 400 });
     }
 
-    let session = data.session ?? null;
+    const session = data.session ?? null;
 
-    if (!session) {
-      const signInResult = await supabase.auth.signInWithPassword({
-        email,
-        password,
-        options: {
-          captchaToken: turnstileToken,
-        },
-      });
-
-      if (isSupabaseCaptchaError(signInResult.error?.message)) {
-        return NextResponse.json(
-          { error: SUPABASE_CAPTCHA_FAILURE_MESSAGE },
-          { status: 400 }
-        );
-      }
-
-      session = signInResult.data.session ?? null;
-    }
+      const profilePayload = {
+        id: data.user.id,
+      email: data.user.email ?? normalizedEmail,
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      customer_type: "retail" as const,
+    };
 
     if (session?.access_token) {
-      await upsertProfileForUser(
-        {
-          id: data.user.id,
-          email: data.user.email ?? email,
-        },
-        {
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          customer_type: "retail",
-        },
-        session.access_token
-      );
-    } else {
-      const adminSupabase = createServerSupabaseAdminClient();
-      const { error: profileError } = await adminSupabase.from("profiles").upsert(
-        {
-          id: data.user.id,
-          email: data.user.email ?? email,
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          customer_type: "retail",
-        },
-        {
-          onConflict: "id",
-        }
-      );
+      try {
+        await upsertProfileForUser(
+          {
+            id: data.user.id,
+            email: data.user.email ?? normalizedEmail,
+          },
+          {
+            first_name: firstName,
+            last_name: lastName,
+            phone,
+            customer_type: "retail",
+          },
+          session.access_token
+        );
+      } catch (profileError) {
+        logRegisterDev("Register profile upsert failed", {
+          profileCreateErrorMessage:
+            profileError instanceof Error ? profileError.message : "Unknown profile error",
+          profileCreateErrorCode: null,
+          profileCreateErrorStatus: null,
+          hasSession: true,
+        });
 
-      if (profileError) {
-        throw new Error(profileError.message);
+        try {
+          const adminSupabase = createServerSupabaseAdminClient();
+          const { error: fallbackError } = await adminSupabase.from("profiles").upsert(
+            profilePayload,
+            {
+              onConflict: "id",
+            }
+          );
+
+          if (fallbackError) {
+            logRegisterDev("Register profile service-role fallback failed", {
+              profileCreateErrorMessage: fallbackError.message,
+              profileCreateErrorCode:
+                "code" in fallbackError
+                  ? (fallbackError as { code?: string }).code ?? null
+                  : null,
+              profileCreateErrorStatus:
+                "status" in fallbackError
+                  ? (fallbackError as { status?: number }).status ?? null
+                  : null,
+              hasSession: true,
+            });
+          }
+        } catch (fallbackError) {
+          logRegisterDev("Register profile fallback threw", {
+            profileCreateErrorMessage:
+              fallbackError instanceof Error ? fallbackError.message : "Unknown fallback error",
+            profileCreateErrorCode: null,
+            profileCreateErrorStatus: null,
+            hasSession: true,
+          });
+        }
+      }
+    } else {
+      try {
+        const adminSupabase = createServerSupabaseAdminClient();
+        const { error: profileError } = await adminSupabase.from("profiles").upsert(
+          profilePayload,
+          {
+            onConflict: "id",
+          }
+        );
+
+        if (profileError) {
+          logRegisterDev("Register profile create skipped on email confirmation", {
+            profileCreateErrorMessage: profileError.message,
+            profileCreateErrorCode:
+              "code" in profileError
+                ? (profileError as { code?: string }).code ?? null
+                : null,
+            profileCreateErrorStatus:
+              "status" in profileError
+                ? (profileError as { status?: number }).status ?? null
+                : null,
+            hasSession: false,
+          });
+        }
+      } catch (profileError) {
+        logRegisterDev("Register profile create threw on email confirmation", {
+          profileCreateErrorMessage:
+            profileError instanceof Error ? profileError.message : "Unknown profile error",
+          profileCreateErrorCode: null,
+          profileCreateErrorStatus: null,
+          hasSession: false,
+        });
       }
     }
 
-    const response = NextResponse.json({ success: true });
+    const requiresEmailConfirmation = !session;
+    const response = NextResponse.json({
+      ok: true,
+      requiresEmailConfirmation,
+      message: requiresEmailConfirmation ? EMAIL_CONFIRMATION_MESSAGE : undefined,
+    });
 
     if (session) {
       setCustomerSessionCookies(response, session);
     }
 
     return response;
-  } catch {
+  } catch (error) {
+    logRegisterDev("Register route threw", {
+      routeErrorMessage: error instanceof Error ? error.message : "Unknown route error",
+    });
     return NextResponse.json({ error: "Не вдалося створити акаунт." }, { status: 500 });
   }
 }

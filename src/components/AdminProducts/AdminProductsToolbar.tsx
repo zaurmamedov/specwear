@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/Button";
+import { buildCategoryOptions } from "@/lib/categories";
 import type { ProductStatus } from "@/lib/product-status";
 import type { Category } from "@/types/category";
 import type { AdminProductSort } from "@/types/admin-product";
@@ -28,6 +29,7 @@ export function AdminProductsToolbar({
 }: AdminProductsToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const categoryOptions = buildCategoryOptions(categories);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(initialCategory);
   const [status, setStatus] = useState<ProductStatus | "">(initialStatus);
@@ -91,9 +93,9 @@ export function AdminProductsToolbar({
         <span>Категорія</span>
         <select value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="">Усі категорії</option>
-          {categories.map((item) => (
+          {categoryOptions.map(({ category: item, label }) => (
             <option key={item.id} value={item.slug}>
-              {item.name}
+              {label}
             </option>
           ))}
         </select>
