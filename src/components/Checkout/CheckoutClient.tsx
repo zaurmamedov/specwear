@@ -668,7 +668,6 @@ export function CheckoutClient({
         lastName: form.lastName.trim(),
         phone: form.phone.trim(),
         email: form.email.trim(),
-        customerType: form.customerType,
         deliveryService: form.deliveryService,
         deliveryMethod: form.deliveryMethod,
         deliveryCity: form.deliveryCity.trim(),
@@ -677,10 +676,11 @@ export function CheckoutClient({
         deliveryWarehouseRef: form.deliveryWarehouseRef,
         deliveryAddress: isCourier ? form.deliveryAddress.trim() || null : null,
         comment: form.comment.trim() || null,
-        subtotal,
-        deliveryPrice,
-        total,
-        items,
+        items: items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          quantity: item.quantity,
+        })),
         turnstileToken,
       };
 
@@ -695,9 +695,20 @@ export function CheckoutClient({
       const payload = (await response.json()) as {
         error?: string;
         orderId?: string;
+        subtotal?: number;
+        deliveryPrice?: number;
+        discount?: number;
+        total?: number;
       };
 
-      if (!response.ok || !payload.orderId) {
+      if (
+        !response.ok ||
+        !payload.orderId ||
+        !Number.isSafeInteger(payload.subtotal) ||
+        !Number.isSafeInteger(payload.deliveryPrice) ||
+        !Number.isSafeInteger(payload.discount) ||
+        !Number.isSafeInteger(payload.total)
+      ) {
         throw new Error(payload.error ?? "Не вдалося створити замовлення.");
       }
 
@@ -708,7 +719,7 @@ export function CheckoutClient({
       turnstileRef.current?.reset();
       setSubmitError(
         error instanceof Error
-          ? `Не вдалося оформити замовлення: ${error.message}`
+          ? error.message
           : "Не вдалося оформити замовлення."
       );
       setIsSubmitting(false);

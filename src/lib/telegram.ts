@@ -6,7 +6,7 @@ type TelegramOrderItem = {
   price: number;
 };
 
-type TelegramOrderNotificationInput = {
+export type TelegramOrderNotificationInput = {
   orderId: string;
   firstName: string;
   lastName: string;
@@ -17,6 +17,9 @@ type TelegramOrderNotificationInput = {
   deliveryCity: string;
   deliveryWarehouse?: string | null;
   deliveryAddress?: string | null;
+  subtotal: number;
+  deliveryPrice: number;
+  discount: number;
   total: number;
   items: TelegramOrderItem[];
 };
@@ -125,7 +128,12 @@ function buildOrderMessage(input: TelegramOrderNotificationInput) {
     escapeHtml(input.deliveryCity),
     "",
     "💰 <b>Сума:</b>",
-    `${formatPrice(input.total)} грн`,
+    `Товари: ${formatPrice(input.subtotal)} грн`,
+    `Доставка: ${formatPrice(input.deliveryPrice)} грн`,
+    ...(input.discount > 0
+      ? [`Знижка: −${formatPrice(input.discount)} грн`]
+      : []),
+    `<b>Разом: ${formatPrice(input.total)} грн</b>`,
     "",
     "📦 <b>Товари:</b>",
     "",
