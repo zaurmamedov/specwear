@@ -6,14 +6,28 @@ import {
   getCustomerUserFromCookieStore,
 } from "@/lib/customer-auth";
 import {
+  createCheckoutRequestFingerprint,
+  CheckoutIdempotencyKeyError,
+  parseCheckoutIdempotencyKey,
+} from "@/lib/checkout-idempotency";
+import { coordinateIdempotentCheckout } from "@/lib/checkout-idempotency-coordinator";
+import {
   getTurnstileRemoteIp,
   verifyTurnstileToken,
 } from "@/lib/security/turnstile";
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
-import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderTelegramNotification } from "@/lib/telegram";
-import { CheckoutPricingError } from "@/lib/checkout-pricing";
+import {
+  CheckoutPricingError,
+  parseCheckoutCartItems,
+} from "@/lib/checkout-pricing";
 import { upsertProfileForUser } from "@/services/account.service";
+import {
+  createCheckoutOrderAtomically,
+  CheckoutOrderPersistenceError,
+  lookupCheckoutIdempotency,
+  type CheckoutOrderContactData,
+} from "@/services/checkout-order.service";
 import {
   buildAuthoritativeCheckoutPricing,
   CheckoutProfileLookupError,
@@ -34,6 +48,13 @@ function getOptionalString(value: unknown) {
   return normalized || null;
 }
 
+class CheckoutTurnstileError extends Error {
+  constructor() {
+    super(TURNSTILE_FAILURE_MESSAGE);
+    this.name = "CheckoutTurnstileError";
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const parsedBody = (await request.json()) as unknown;
@@ -46,19 +67,9 @@ export async function POST(request: Request) {
     }
 
     const body = parsedBody;
-    const turnstileVerification = await verifyTurnstileToken(
-      getString(body.turnstileToken),
-      getTurnstileRemoteIp(request)
+    const idempotencyKey = parseCheckoutIdempotencyKey(
+      request.headers.get("Idempotency-Key")
     );
-
-    if (!turnstileVerification.success) {
-      console.error("Turnstile verification failed on checkout:", {
-        error: turnstileVerification.error,
-      });
-
-      return NextResponse.json({ error: TURNSTILE_FAILURE_MESSAGE }, { status: 400 });
-    }
-
     const firstName = getString(body.firstName);
     const lastName = getString(body.lastName);
     const phone = getString(body.phone);
@@ -79,96 +90,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedItems = parseCheckoutCartItems(body.items);
     const cookieStore = await cookies();
     const customerAccessToken =
       getCustomerAccessTokenFromCookieStore(cookieStore);
     const customerUser = await getCustomerUserFromCookieStore(cookieStore);
-    const pricingContext = await getTrustedCheckoutPricingContext(
-      customerUser?.id ?? null,
-      customerAccessToken
-    );
-    const customerType = getTrustedCheckoutCustomerType(pricingContext);
-    const pricing = await buildAuthoritativeCheckoutPricing({
-      rawItems: body.items,
-      pricingContext,
-    });
-    const supabase = createServerSupabaseAdminClient();
-    const orderId = crypto.randomUUID();
-
-    const orderPayload = {
-      id: orderId,
-      user_id: customerUser?.id ?? null,
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      email: email || null,
-      customer_type: customerType,
-      delivery_service: deliveryService,
-      delivery_method: deliveryMethod,
-      delivery_city: deliveryCity,
-      delivery_city_ref: deliveryCityRef,
-      delivery_warehouse: deliveryWarehouse,
-      delivery_warehouse_ref: deliveryWarehouseRef,
-      delivery_address: deliveryAddress,
-      comment,
-      subtotal: pricing.subtotal,
-      delivery_price: pricing.deliveryPrice,
-      total: pricing.total,
-      status: "new",
-    };
-
-    const { error: orderError } = await supabase.from("orders").insert(orderPayload);
-
-    if (orderError) {
-      throw new Error("Failed to create order.");
-    }
-
-    const orderItemsPayload = pricing.items.map((item) => ({
-      order_id: orderId,
-      product_id: item.productId,
-      variant_id: item.variantId,
-      product_name: item.productName,
-      product_slug: item.productSlug,
-      image_url: item.imageUrl,
-      sku: item.sku,
-      size: item.size,
-      color: item.color,
-      brand_name: item.brandName,
-      category_name: item.categoryName,
-      price: item.unitPrice,
-      quantity: item.quantity,
-      total: item.lineTotal,
-    }));
-
-    const { error: itemsError } = await supabase.from("order_items").insert(orderItemsPayload);
-
-    if (itemsError) {
-      throw new Error("Failed to create order items.");
-    }
-
-    if (customerUser) {
-      try {
-        await upsertProfileForUser(customerUser, {
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          email: email || customerUser.email || null,
-          delivery_service: deliveryService,
-          delivery_method: deliveryMethod,
-          delivery_city: deliveryCity,
-          delivery_city_ref: deliveryCityRef,
-          delivery_warehouse: deliveryWarehouse,
-          delivery_warehouse_ref: deliveryWarehouseRef,
-          delivery_address: deliveryAddress,
-          customer_type: customerType,
-        });
-      } catch (profileError) {
-        console.error("Failed to update customer profile after checkout:", profileError);
-      }
-    }
-
-    await sendOrderTelegramNotification({
-      orderId,
+    const userId = customerUser?.id ?? null;
+    const contact: CheckoutOrderContactData = {
       firstName,
       lastName,
       phone,
@@ -176,36 +104,161 @@ export async function POST(request: Request) {
       deliveryService,
       deliveryMethod,
       deliveryCity,
+      deliveryCityRef,
       deliveryWarehouse,
+      deliveryWarehouseRef,
       deliveryAddress,
-      subtotal: pricing.subtotal,
-      deliveryPrice: pricing.deliveryPrice,
-      discount: pricing.discount,
-      total: pricing.total,
-      items: orderItemsPayload.map((item) => ({
-        productName: item.product_name,
-        quantity: item.quantity,
-        price: item.price,
-      })),
+      comment,
+    };
+    const requestFingerprint = createCheckoutRequestFingerprint({
+      userId,
+      firstName,
+      lastName,
+      phone,
+      email,
+      deliveryService,
+      deliveryMethod,
+      deliveryCity,
+      deliveryCityRef,
+      deliveryWarehouse,
+      deliveryWarehouseRef,
+      deliveryAddress,
+      comment,
+      items: normalizedItems,
     });
 
+    const result = await coordinateIdempotentCheckout({
+      lookup: () =>
+        lookupCheckoutIdempotency({
+          idempotencyKey,
+          requestFingerprint,
+          userId,
+        }),
+      prepare: async () => {
+        const turnstileVerification = await verifyTurnstileToken(
+          getString(body.turnstileToken),
+          getTurnstileRemoteIp(request),
+          idempotencyKey
+        );
+
+        if (!turnstileVerification.success) {
+          console.error("Turnstile verification failed on checkout:", {
+            error: turnstileVerification.error,
+          });
+          throw new CheckoutTurnstileError();
+        }
+
+        const pricingContext = await getTrustedCheckoutPricingContext(
+          userId,
+          customerAccessToken
+        );
+        const customerType = getTrustedCheckoutCustomerType(pricingContext);
+        const pricing = await buildAuthoritativeCheckoutPricing({
+          rawItems: normalizedItems,
+          pricingContext,
+        });
+
+        return {
+          orderId: crypto.randomUUID(),
+          customerType,
+          pricing,
+        };
+      },
+      commit: (prepared) =>
+        createCheckoutOrderAtomically({
+          idempotencyKey,
+          requestFingerprint,
+          orderId: prepared.orderId,
+          userId,
+          customerType: prepared.customerType,
+          contact,
+          pricing: prepared.pricing,
+        }),
+      afterCreated: async (prepared, response) => {
+        if (customerUser) {
+          try {
+            await upsertProfileForUser(customerUser, {
+              first_name: firstName,
+              last_name: lastName,
+              phone,
+              email: email || customerUser.email || null,
+              delivery_service: deliveryService,
+              delivery_method: deliveryMethod,
+              delivery_city: deliveryCity,
+              delivery_city_ref: deliveryCityRef,
+              delivery_warehouse: deliveryWarehouse,
+              delivery_warehouse_ref: deliveryWarehouseRef,
+              delivery_address: deliveryAddress,
+              customer_type: prepared.customerType,
+            });
+          } catch (profileError) {
+            console.error(
+              "Failed to update customer profile after checkout:",
+              profileError
+            );
+          }
+        }
+
+        await sendOrderTelegramNotification({
+          orderId: response.orderId,
+          firstName,
+          lastName,
+          phone,
+          email: email || null,
+          deliveryService,
+          deliveryMethod,
+          deliveryCity,
+          deliveryWarehouse,
+          deliveryAddress,
+          subtotal: response.subtotal,
+          deliveryPrice: response.deliveryPrice,
+          discount: response.discount,
+          total: response.total,
+          items: prepared.pricing.items.map((item) => ({
+            productName: item.productName,
+            quantity: item.quantity,
+            price: item.unitPrice,
+          })),
+        });
+      },
+    });
+
+    if (result.outcome === "conflict") {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "CHECKOUT_IDEMPOTENCY_CONFLICT",
+          error:
+            "Цей ідентифікатор оформлення вже використано для іншого замовлення.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (result.outcome === "missing") {
+      throw new CheckoutOrderPersistenceError();
+    }
+
     return NextResponse.json({
-      success: true,
-      orderId,
-      customerType,
-      subtotal: pricing.subtotal,
-      deliveryPrice: pricing.deliveryPrice,
-      discount: pricing.discount,
-      total: pricing.total,
-      items: pricing.items.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal: item.lineTotal,
-      })),
+      ...result.response,
+      reused: result.outcome === "reused",
     });
   } catch (error) {
+    if (error instanceof CheckoutIdempotencyKeyError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: error.code,
+          error: error.message,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof CheckoutTurnstileError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     if (error instanceof CheckoutPricingError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -216,6 +269,17 @@ export async function POST(request: Request) {
           success: false,
           code: error.code,
           message: error.message,
+          error: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (error instanceof CheckoutOrderPersistenceError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: error.code,
           error: error.message,
         },
         { status: 500 }

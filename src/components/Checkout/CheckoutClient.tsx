@@ -78,6 +78,15 @@ type CartAvailabilityResult = {
   message: string | null;
 };
 
+type PersistedCheckoutAttempt = {
+  key: string;
+  signature: string;
+};
+
+const CHECKOUT_ATTEMPT_STORAGE_KEY = "specwear-checkout-attempt";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type CheckoutProfileData = {
   firstName: string;
   lastName: string;
@@ -175,6 +184,70 @@ function validateEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+function bytesToHex(bytes: ArrayBuffer) {
+  return Array.from(new Uint8Array(bytes), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+async function createCheckoutAttemptSignature(value: unknown) {
+  const serialized = JSON.stringify(value);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(serialized)
+  );
+
+  return bytesToHex(digest);
+}
+
+function readPersistedCheckoutAttempt(): PersistedCheckoutAttempt | null {
+  try {
+    const storedValue = localStorage.getItem(CHECKOUT_ATTEMPT_STORAGE_KEY);
+
+    if (!storedValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(storedValue) as Partial<PersistedCheckoutAttempt>;
+
+    if (
+      typeof parsed.key !== "string" ||
+      !UUID_PATTERN.test(parsed.key) ||
+      typeof parsed.signature !== "string" ||
+      !/^[0-9a-f]{64}$/.test(parsed.signature)
+    ) {
+      return null;
+    }
+
+    return {
+      key: parsed.key,
+      signature: parsed.signature,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistCheckoutAttempt(attempt: PersistedCheckoutAttempt) {
+  try {
+    localStorage.setItem(CHECKOUT_ATTEMPT_STORAGE_KEY, JSON.stringify(attempt));
+  } catch {
+    // The in-memory ref still provides protection for the current page lifetime.
+  }
+}
+
+function removePersistedCheckoutAttempt(key: string) {
+  try {
+    const current = readPersistedCheckoutAttempt();
+
+    if (current?.key === key) {
+      localStorage.removeItem(CHECKOUT_ATTEMPT_STORAGE_KEY);
+    }
+  } catch {
+    // Storage cleanup is best effort after an authoritative result.
+  }
+}
+
 type CheckoutClientProps = {
   developmentWarning?: string | null;
   initialProfile?: CheckoutProfileData | null;
@@ -226,6 +299,8 @@ export function CheckoutClient({
   const deliveryWarehouseRef = useRef<HTMLSelectElement | HTMLInputElement>(null);
   const deliveryAddressRef = useRef<HTMLInputElement>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
+  const submissionLockRef = useRef(false);
+  const checkoutAttemptRef = useRef<PersistedCheckoutAttempt | null>(null);
 
   const subtotal = useMemo(
     () => items.reduce((total, item) => total + (item.price ?? 0) * item.quantity, 0),
@@ -641,6 +716,10 @@ export function CheckoutClient({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (submissionLockRef.current) {
+      return;
+    }
+
     if (!canSubmit) {
       if (!turnstileToken) {
         setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
@@ -659,11 +738,14 @@ export function CheckoutClient({
       return;
     }
 
+    submissionLockRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
+    let completedSuccessfully = false;
 
     try {
-      const orderPayload = {
+      const semanticPayload = {
+        authenticated: isAuthenticated,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         phone: form.phone.trim(),
@@ -681,6 +763,37 @@ export function CheckoutClient({
           variantId: item.variantId ?? null,
           quantity: item.quantity,
         })),
+      };
+      semanticPayload.items.sort((left, right) => {
+        const productComparison = left.productId.localeCompare(right.productId);
+
+        if (productComparison !== 0) {
+          return productComparison;
+        }
+
+        return (left.variantId ?? "").localeCompare(right.variantId ?? "");
+      });
+      const signature = await createCheckoutAttemptSignature(semanticPayload);
+      const persistedAttempt = readPersistedCheckoutAttempt();
+      const cachedAttempt = checkoutAttemptRef.current;
+      const reusableAttempt =
+        persistedAttempt?.signature === signature
+          ? persistedAttempt
+          : cachedAttempt?.signature === signature
+            ? cachedAttempt
+            : null;
+      const checkoutAttempt = reusableAttempt ?? {
+        key: crypto.randomUUID(),
+        signature,
+      };
+
+      checkoutAttemptRef.current = checkoutAttempt;
+      persistCheckoutAttempt(checkoutAttempt);
+
+      const { authenticated: _authenticated, ...checkoutPayload } = semanticPayload;
+      void _authenticated;
+      const orderPayload = {
+        ...checkoutPayload,
         turnstileToken,
       };
 
@@ -688,6 +801,7 @@ export function CheckoutClient({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Idempotency-Key": checkoutAttempt.key,
         },
         body: JSON.stringify(orderPayload),
       });
@@ -699,6 +813,7 @@ export function CheckoutClient({
         deliveryPrice?: number;
         discount?: number;
         total?: number;
+        code?: string;
       };
 
       if (
@@ -709,9 +824,20 @@ export function CheckoutClient({
         !Number.isSafeInteger(payload.discount) ||
         !Number.isSafeInteger(payload.total)
       ) {
+        if (
+          response.status === 409 &&
+          payload.code === "CHECKOUT_IDEMPOTENCY_CONFLICT"
+        ) {
+          removePersistedCheckoutAttempt(checkoutAttempt.key);
+          checkoutAttemptRef.current = null;
+        }
+
         throw new Error(payload.error ?? "Не вдалося створити замовлення.");
       }
 
+      completedSuccessfully = true;
+      removePersistedCheckoutAttempt(checkoutAttempt.key);
+      checkoutAttemptRef.current = null;
       clearCart();
       router.replace(`/checkout/success?order=${payload.orderId}`);
     } catch (error) {
@@ -722,7 +848,12 @@ export function CheckoutClient({
           ? error.message
           : "Не вдалося оформити замовлення."
       );
-      setIsSubmitting(false);
+    } finally {
+      submissionLockRef.current = false;
+
+      if (!completedSuccessfully) {
+        setIsSubmitting(false);
+      }
     }
   }
 
