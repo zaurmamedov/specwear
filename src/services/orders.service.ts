@@ -3,6 +3,20 @@ import "server-only";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Order, OrderStatus, OrdersListFilters, OrderWithItems } from "@/types/order";
 
+export class OrderStatusUpdateError extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      | "ORDER_NOT_FOUND"
+      | "ORDER_REOPEN_FORBIDDEN"
+      | "ORDER_INVENTORY_UPDATE_FAILED",
+    readonly httpStatus: number
+  ) {
+    super(message);
+    this.name = "OrderStatusUpdateError";
+  }
+}
+
 function matchesSearch(order: Order, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -74,9 +88,57 @@ export async function getOrderById(id: string): Promise<OrderWithItems | null> {
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
   const supabase = createServerSupabaseAdminClient();
-  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  const { data, error } = await supabase.rpc("update_order_status_with_inventory", {
+    p_order_id: id,
+    p_status: status,
+  });
 
   if (error) {
-    throw new Error(`Failed to update order status: ${error.message}`);
+    console.error("Atomic order status update failed:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw new OrderStatusUpdateError(
+      "Не вдалося безпечно оновити статус замовлення.",
+      "ORDER_INVENTORY_UPDATE_FAILED",
+      500
+    );
+  }
+
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new OrderStatusUpdateError(
+      "Не вдалося безпечно оновити статус замовлення.",
+      "ORDER_INVENTORY_UPDATE_FAILED",
+      500
+    );
+  }
+
+  if (data.outcome === "not_found") {
+    throw new OrderStatusUpdateError(
+      "Замовлення не знайдено.",
+      "ORDER_NOT_FOUND",
+      404
+    );
+  }
+
+  if (data.outcome === "reopening_forbidden") {
+    throw new OrderStatusUpdateError(
+      "Скасоване замовлення не можна повернути в активний статус.",
+      "ORDER_REOPEN_FORBIDDEN",
+      409
+    );
+  }
+
+  if (
+    data.outcome === "inventory_error" ||
+    (data.outcome !== "updated" && data.outcome !== "unchanged")
+  ) {
+    throw new OrderStatusUpdateError(
+      "Не вдалося безпечно оновити залишки для цього замовлення.",
+      "ORDER_INVENTORY_UPDATE_FAILED",
+      409
+    );
   }
 }

@@ -618,3 +618,32 @@ test("новий ключ дозволяє свідомо створити ще 
   assert.deepEqual(repository.orders, ["order-1", "order-2"]);
   assert.equal(repository.notifications, 2);
 });
+
+test("недостатній stock не запускає afterCreated і дозволяє повторити той самий ключ", async () => {
+  let stockAvailable = false;
+  let notifications = 0;
+  const response = createResponse("order-after-restock");
+
+  async function attempt() {
+    return coordinateIdempotentCheckout({
+      lookup: async () => ({ outcome: "missing" as const }),
+      prepare: async () => response,
+      commit: async () =>
+        stockAvailable
+          ? ({ outcome: "created", response } as const)
+          : ({ outcome: "insufficient_stock" } as const),
+      afterCreated: async () => {
+        notifications += 1;
+      },
+    });
+  }
+
+  const insufficient = await attempt();
+  assert.equal(insufficient.outcome, "insufficient_stock");
+  assert.equal(notifications, 0);
+
+  stockAvailable = true;
+  const retry = await attempt();
+  assert.equal(retry.outcome, "created");
+  assert.equal(notifications, 1);
+});

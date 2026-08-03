@@ -18,6 +18,15 @@ import type {
 
 export const PRODUCT_IMAGES_BUCKET = "specwear_products";
 
+export class AdminVariantStockConflictError extends Error {
+  readonly code = "ADMIN_VARIANT_STOCK_CONFLICT";
+
+  constructor() {
+    super("Залишок товару вже змінився. Оновіть сторінку та повторіть дію.");
+    this.name = "AdminVariantStockConflictError";
+  }
+}
+
 type AdminProductImageRecord = AdminEditableProduct["product_images"][number];
 type AdminProductImageState = {
   images: AdminProductImageRecord[];
@@ -616,28 +625,6 @@ export async function updateAdminProduct(
     throw new Error(`Failed to update product: ${productError.message}`);
   }
 
-  for (const variant of input.variants) {
-    const { error: variantError } = await supabase
-      .from("product_variants")
-      .update({
-        size: variant.size,
-        color: variant.color,
-        sku: variant.sku,
-        retail_price: toInteger(variant.retail_price),
-        old_price: toOptionalInteger(variant.old_price),
-        wholesale_price: toOptionalInteger(variant.wholesale_price),
-        stock_quantity: Math.max(0, toInteger(variant.stock_quantity)),
-        is_active: variant.is_active,
-        updated_at: updatedAt,
-      })
-      .eq("id", variant.id)
-      .eq("product_id", id);
-
-    if (variantError) {
-      throw new Error(`Failed to update variant ${variant.id}: ${variantError.message}`);
-    }
-  }
-
   for (const image of input.images) {
     const { error: imageError } = await supabase
       .from("product_images")
@@ -758,29 +745,50 @@ export async function createAdminProductVariant(
 export async function updateAdminProductVariant(
   variantId: string,
   productId: string,
-  input: AdminProductVariantInput
+  input: AdminProductVariantInput,
+  expectedStockQuantity: number,
+  expectedUpdatedAt: string
 ): Promise<void> {
   const supabase = createServerSupabaseAdminClient();
-  const updatedAt = new Date().toISOString();
-
-  const { error } = await supabase
-    .from("product_variants")
-    .update({
-      sku: input.sku,
-      size: input.size,
-      color: input.color,
-      retail_price: toInteger(input.retail_price),
-      old_price: toOptionalInteger(input.old_price),
-      wholesale_price: toOptionalInteger(input.wholesale_price),
-      stock_quantity: Math.max(0, toInteger(input.stock_quantity)),
-      is_active: input.is_active,
-      updated_at: updatedAt,
-    })
-    .eq("id", variantId)
-    .eq("product_id", productId);
+  const { data, error } = await supabase.rpc("update_product_variant_admin", {
+    p_variant_id: variantId,
+    p_product_id: productId,
+    p_expected_stock_quantity: expectedStockQuantity,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_stock_quantity: Math.max(0, toInteger(input.stock_quantity)),
+    p_sku: input.sku,
+    p_size: input.size,
+    p_color: input.color,
+    p_retail_price: toInteger(input.retail_price),
+    p_old_price: toOptionalInteger(input.old_price),
+    p_wholesale_price: toOptionalInteger(input.wholesale_price),
+    p_is_active: input.is_active,
+  });
 
   if (error) {
-    throw new Error(`Failed to update product variant: ${error.message}`);
+    console.error("Atomic admin variant update failed:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw new Error("Не вдалося безпечно оновити варіант товару.");
+  }
+
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("Не вдалося безпечно оновити варіант товару.");
+  }
+
+  if (data.outcome === "stock_conflict") {
+    throw new AdminVariantStockConflictError();
+  }
+
+  if (data.outcome === "not_found") {
+    throw new Error("Варіант товару не знайдено.");
+  }
+
+  if (data.outcome !== "updated") {
+    throw new Error("Не вдалося безпечно оновити варіант товару.");
   }
 }
 
@@ -789,6 +797,23 @@ export async function deleteAdminProductVariant(
   productId: string
 ): Promise<void> {
   const supabase = createServerSupabaseAdminClient();
+  const { data: movement, error: movementError } = await supabase
+    .from("inventory_movements")
+    .select("id")
+    .eq("variant_id", variantId)
+    .limit(1)
+    .maybeSingle();
+
+  if (movementError) {
+    throw new Error("Не вдалося безпечно перевірити історію залишків варіанта.");
+  }
+
+  if (movement) {
+    throw new Error(
+      "Варіант має історію руху залишків і не може бути видалений. Зробіть його неактивним."
+    );
+  }
+
   const { error } = await supabase
     .from("product_variants")
     .delete()

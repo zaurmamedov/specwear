@@ -1,6 +1,7 @@
 export type CheckoutIdempotencyResult<TResponse> =
   | { outcome: "missing" }
   | { outcome: "conflict" }
+  | { outcome: "insufficient_stock" }
   | { outcome: "created"; response: TResponse }
   | { outcome: "reused"; response: TResponse };
 

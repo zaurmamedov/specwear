@@ -165,6 +165,10 @@ export async function createCheckoutOrderAtomically(input: {
     return { outcome: "conflict" };
   }
 
+  if (data.outcome === "insufficient_stock") {
+    return { outcome: "insufficient_stock" };
+  }
+
   if (
     (data.outcome !== "created" && data.outcome !== "reused") ||
     !("response" in data) ||

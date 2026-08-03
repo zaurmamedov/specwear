@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
+import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
 import { DEFAULT_SLUG_PATTERN, slugifyLatin } from "@/lib/slugs";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { createAdminProduct } from "@/services/admin-products.service";
@@ -92,7 +93,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+    if (
+      !Number.isFinite(stockQuantity) ||
+      stockQuantity < 0 ||
+      stockQuantity > POSTGRES_INTEGER_MAX
+    ) {
       return NextResponse.json(
         { error: "Залишок не може бути від’ємним." },
         { status: 400 }

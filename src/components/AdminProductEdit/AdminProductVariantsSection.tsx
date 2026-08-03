@@ -372,6 +372,8 @@ export function AdminProductVariantsSection({
           ...payload,
           productId,
           productSlug,
+          expected_stock_quantity: editingVariant?.stock_quantity,
+          expected_updated_at: editingVariant?.updated_at,
         }),
       });
 
@@ -472,6 +474,8 @@ export function AdminProductVariantsSection({
           old_price: variant.old_price,
           wholesale_price: variant.wholesale_price,
           stock_quantity: variant.stock_quantity,
+          expected_stock_quantity: variant.stock_quantity,
+          expected_updated_at: variant.updated_at,
           is_active: shouldActivate,
         }),
       });

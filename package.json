@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:checkout": "node --test --experimental-strip-types src/lib/checkout-pricing.test.mts src/lib/checkout-idempotency.test.mts",
-    "test:checkout-idempotency": "node --test --experimental-strip-types src/lib/checkout-idempotency.test.mts"
+    "test:checkout": "node --test --experimental-strip-types src/lib/checkout-pricing.test.mts src/lib/checkout-idempotency.test.mts src/lib/checkout-inventory.test.mts",
+    "test:checkout-idempotency": "node --test --experimental-strip-types src/lib/checkout-idempotency.test.mts",
+    "test:inventory": "node --test --experimental-strip-types src/lib/checkout-inventory.test.mts",
+    "test:inventory:integration": "node scripts/checkout-inventory.integration.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

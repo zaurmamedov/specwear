@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
-import { updateOrderStatus } from "@/services/orders.service";
+import {
+  OrderStatusUpdateError,
+  updateOrderStatus,
+} from "@/services/orders.service";
 import type { OrderStatus } from "@/types/order";
 
 const allowedStatuses: OrderStatus[] = [
@@ -45,6 +48,13 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof OrderStatusUpdateError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.httpStatus }
+      );
+    }
+
     return NextResponse.json(
       {
         error:

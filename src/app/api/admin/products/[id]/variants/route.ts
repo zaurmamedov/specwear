@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
 import { createAdminProductVariant } from "@/services/admin-products.service";
 import type { AdminProductVariantInput } from "@/types/admin-product";
 
@@ -88,7 +89,11 @@ export async function POST(
       );
     }
 
-    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+    if (
+      !Number.isFinite(stockQuantity) ||
+      stockQuantity < 0 ||
+      stockQuantity > POSTGRES_INTEGER_MAX
+    ) {
       return NextResponse.json(
         { error: "Залишок варіанту не може бути від’ємним." },
         { status: 400 }

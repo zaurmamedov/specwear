@@ -235,6 +235,17 @@ export async function POST(request: Request) {
       );
     }
 
+    if (result.outcome === "insufficient_stock") {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "CHECKOUT_INSUFFICIENT_STOCK",
+          error: "Недостатньо товару в наявності. Оновіть кошик і спробуйте ще раз.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (result.outcome === "missing") {
       throw new CheckoutOrderPersistenceError();
     }

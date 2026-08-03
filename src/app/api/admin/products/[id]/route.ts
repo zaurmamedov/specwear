@@ -57,6 +57,13 @@ export async function PATCH(
     const categoryId = normalizeText(body.category_id);
     const status = normalizeText(body.status) as ProductStatus;
 
+    if (Array.isArray(body.variants) && body.variants.length > 0) {
+      return NextResponse.json(
+        { error: "Оновлюйте варіанти через окрему форму варіанта." },
+        { status: 400 }
+      );
+    }
+
     if (!name) {
       return NextResponse.json(
         { error: "Назва товару є обов’язковою." },

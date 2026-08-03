@@ -61,7 +61,7 @@ export function OrderStatusSelect({
         className={styles.statusSelect}
         value={status}
         onChange={(event) => handleChange(event.target.value as OrderStatus)}
-        disabled={isPending}
+        disabled={isPending || initialStatus === "cancelled"}
         aria-label="Змінити статус замовлення"
       >
         <option value="new">Нове</option>

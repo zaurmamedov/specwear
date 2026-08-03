@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 
 import {
+  CheckoutPricingError,
+  parseCheckoutCartItems,
+} from "@/lib/checkout-pricing";
+import {
   validateCartItems,
-  type CartValidationInputItem,
 } from "@/services/cart-validation.service";
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      items?: CartValidationInputItem[];
+      items?: unknown;
     };
 
-    const items = Array.isArray(body.items) ? body.items : [];
+    const items = parseCheckoutCartItems(body.items);
     const validation = await validateCartItems(items);
 
     return NextResponse.json({
@@ -19,6 +22,10 @@ export async function POST(request: Request) {
       hasUnavailableItems: validation.some((item) => !item.isAvailable),
     });
   } catch (error) {
+    if (error instanceof CheckoutPricingError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return NextResponse.json(
       {
         error:

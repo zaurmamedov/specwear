@@ -3,7 +3,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
 import {
+  AdminVariantStockConflictError,
   deleteAdminProductVariant,
   updateAdminProductVariant,
 } from "@/services/admin-products.service";
@@ -92,8 +94,12 @@ export async function PATCH(
     const body = (await request.json()) as Partial<AdminProductVariantInput> & {
       productId?: string;
       productSlug?: string | null;
+      expected_stock_quantity?: number;
+      expected_updated_at?: string;
     };
     const productId = normalizeText(body.productId);
+    const expectedStockQuantity = normalizeInteger(body.expected_stock_quantity);
+    const expectedUpdatedAt = normalizeText(body.expected_updated_at);
 
     if (!productId) {
       return NextResponse.json(
@@ -111,14 +117,42 @@ export async function PATCH(
       );
     }
 
-    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+    if (
+      !Number.isFinite(stockQuantity) ||
+      stockQuantity < 0 ||
+      stockQuantity > POSTGRES_INTEGER_MAX
+    ) {
       return NextResponse.json(
         { error: "Залишок варіанту не може бути від’ємним." },
         { status: 400 }
       );
     }
 
-    await updateAdminProductVariant(variantId, productId, payload);
+    if (!expectedUpdatedAt || Number.isNaN(Date.parse(expectedUpdatedAt))) {
+      return NextResponse.json(
+        { error: "Не вдалося перевірити версію даних варіанта." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isFinite(expectedStockQuantity) ||
+      expectedStockQuantity < 0 ||
+      expectedStockQuantity > POSTGRES_INTEGER_MAX
+    ) {
+      return NextResponse.json(
+        { error: "Не вдалося перевірити актуальний залишок варіанта." },
+        { status: 400 }
+      );
+    }
+
+    await updateAdminProductVariant(
+      variantId,
+      productId,
+      payload,
+      expectedStockQuantity,
+      expectedUpdatedAt
+    );
     const productSlug = normalizeOptionalText(body.productSlug);
 
     revalidatePath("/admin/products");
@@ -130,6 +164,13 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AdminVariantStockConflictError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error:
