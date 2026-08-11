@@ -16,7 +16,29 @@ import {
 
 import { Button } from "@/components/Button";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import {
+  type CheckoutClientFieldErrors,
+  type CheckoutClientFieldName,
+  getCheckoutClientValidationErrors,
+  getFirstInvalidCheckoutField,
+  mapCheckoutServerErrorToFields,
+} from "@/lib/checkout-client-validation";
 import { isSupabaseStorageUrl } from "@/lib/images";
+import {
+  CHECKOUT_ADDRESS_MAX_LENGTH,
+  CHECKOUT_CART_MAX_LINE_QUANTITY,
+  CHECKOUT_CART_MAX_RAW_LINES,
+  CHECKOUT_CART_MAX_TOTAL_QUANTITY,
+  CHECKOUT_CITY_MAX_LENGTH,
+  CHECKOUT_COMMENT_MAX_LENGTH,
+  CHECKOUT_EMAIL_MAX_LENGTH,
+  CHECKOUT_NAME_MAX_LENGTH,
+  CHECKOUT_PHONE_MAX_RAW_LENGTH,
+  CHECKOUT_WAREHOUSE_MAX_LENGTH,
+  normalizeCheckoutEmail,
+  normalizeCheckoutName,
+  normalizeUkrainianPhone,
+} from "@/lib/checkout-validation.shared";
 import {
   TURNSTILE_EXPIRED_MESSAGE,
   TURNSTILE_LOAD_ERROR_MESSAGE,
@@ -46,16 +68,8 @@ type CheckoutFormState = {
   comment: string;
 };
 
-type CheckoutFieldName =
-  | "firstName"
-  | "lastName"
-  | "phone"
-  | "email"
-  | "deliveryCity"
-  | "deliveryWarehouse"
-  | "deliveryAddress";
-
-type CheckoutFieldErrors = Record<CheckoutFieldName, string | null>;
+type CheckoutFieldName = CheckoutClientFieldName;
+type CheckoutFieldErrors = CheckoutClientFieldErrors;
 type CheckoutTouchedState = Record<CheckoutFieldName, boolean>;
 
 type NovaPoshtaCity = {
@@ -118,10 +132,26 @@ const initialFormState: CheckoutFormState = {
   comment: "",
 };
 
+function isDeliveryService(value: unknown): value is DeliveryService {
+  return (
+    value === "nova_poshta" || value === "ukrposhta" || value === "pickup"
+  );
+}
+
 function createInitialFormState(profile?: CheckoutProfileData | null): CheckoutFormState {
   if (!profile) {
     return initialFormState;
   }
+
+  const deliveryService = isDeliveryService(profile.deliveryService)
+    ? profile.deliveryService
+    : "nova_poshta";
+  const supportedMethods = deliveryMethodOptions[deliveryService];
+  const deliveryMethod = supportedMethods.some(
+    (option) => option.value === profile.deliveryMethod
+  )
+    ? profile.deliveryMethod
+    : supportedMethods[0]?.value ?? "branch";
 
   return {
     ...initialFormState,
@@ -130,8 +160,8 @@ function createInitialFormState(profile?: CheckoutProfileData | null): CheckoutF
     phone: profile.phone || "+380",
     email: profile.email || "",
     customerType: profile.customerType || "retail",
-    deliveryService: profile.deliveryService || "nova_poshta",
-    deliveryMethod: profile.deliveryMethod || "branch",
+    deliveryService,
+    deliveryMethod,
     deliveryCity: profile.deliveryCity || "",
     deliveryCityRef: profile.deliveryCityRef ?? null,
     deliveryWarehouse: profile.deliveryWarehouse || "",
@@ -165,23 +195,44 @@ function getMethodFieldLabel(method: DeliveryMethod) {
     return "Поштомат";
   }
 
-  if (method === "pickup") {
-    return "Точка самовивозу";
-  }
-
   return "Відділення";
 }
 
-function validatePhone(phone: string) {
-  return /^\+380\d{9}$/.test(phone.trim());
-}
+const EMPTY_FIELD_ERRORS: CheckoutFieldErrors = {
+  firstName: null,
+  lastName: null,
+  phone: null,
+  email: null,
+  deliveryCity: null,
+  deliveryWarehouse: null,
+  deliveryAddress: null,
+  comment: null,
+};
 
-function validateEmail(email: string) {
-  if (email.trim() === "") {
-    return true;
-  }
+const UNTOUCHED_FIELDS: CheckoutTouchedState = {
+  firstName: false,
+  lastName: false,
+  phone: false,
+  email: false,
+  deliveryCity: false,
+  deliveryWarehouse: false,
+  deliveryAddress: false,
+  comment: false,
+};
 
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+const ALL_FIELDS_TOUCHED: CheckoutTouchedState = {
+  firstName: true,
+  lastName: true,
+  phone: true,
+  email: true,
+  deliveryCity: true,
+  deliveryWarehouse: true,
+  deliveryAddress: true,
+  comment: true,
+};
+
+function getFieldErrorId(field: CheckoutFieldName) {
+  return `checkout-${field}-error`;
 }
 
 function bytesToHex(bytes: ArrayBuffer) {
@@ -282,15 +333,9 @@ export function CheckoutClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [cartAvailability, setCartAvailability] = useState<CartAvailabilityResult[]>([]);
-  const [touched, setTouched] = useState<CheckoutTouchedState>({
-    firstName: false,
-    lastName: false,
-    phone: false,
-    email: false,
-    deliveryCity: false,
-    deliveryWarehouse: false,
-    deliveryAddress: false,
-  });
+  const [touched, setTouched] = useState<CheckoutTouchedState>(UNTOUCHED_FIELDS);
+  const [serverFieldErrors, setServerFieldErrors] =
+    useState<CheckoutFieldErrors>(EMPTY_FIELD_ERRORS);
   const firstNameRef = useRef<HTMLInputElement>(null);
   const lastNameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -298,6 +343,7 @@ export function CheckoutClient({
   const deliveryCityRef = useRef<HTMLInputElement>(null);
   const deliveryWarehouseRef = useRef<HTMLSelectElement | HTMLInputElement>(null);
   const deliveryAddressRef = useRef<HTMLInputElement>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
   const submissionLockRef = useRef(false);
   const checkoutAttemptRef = useRef<PersistedCheckoutAttempt | null>(null);
@@ -309,6 +355,14 @@ export function CheckoutClient({
   const deliveryPrice = 0;
   const total = subtotal + deliveryPrice;
   const itemCount = items.reduce((count, item) => count + item.quantity, 0);
+  const cartLimitError =
+    items.length > CHECKOUT_CART_MAX_RAW_LINES
+      ? `У кошику може бути не більше ${CHECKOUT_CART_MAX_RAW_LINES} позицій.`
+      : items.some((item) => item.quantity > CHECKOUT_CART_MAX_LINE_QUANTITY)
+        ? `Кількість одного товару не може перевищувати ${CHECKOUT_CART_MAX_LINE_QUANTITY}.`
+        : itemCount > CHECKOUT_CART_MAX_TOTAL_QUANTITY
+          ? `Загальна кількість товарів не може перевищувати ${CHECKOUT_CART_MAX_TOTAL_QUANTITY}.`
+          : null;
   const effectiveCartAvailability = items.length === 0 ? [] : cartAvailability;
   const hasUnavailableCartItems = effectiveCartAvailability.some(
     (item) => !item.isAvailable
@@ -320,13 +374,13 @@ export function CheckoutClient({
       : null);
 
   const currentMethodOptions = deliveryMethodOptions[form.deliveryService];
+  const isPickup = form.deliveryService === "pickup";
   const isNovaPoshta = form.deliveryService === "nova_poshta";
   const isCourier = form.deliveryMethod === "courier";
   const needsWarehouseInput =
     form.deliveryMethod === "branch" ||
     form.deliveryMethod === "locker";
-  const needsPickupPoint = form.deliveryMethod === "pickup";
-  const needsWarehouseSelection = needsWarehouseInput || needsPickupPoint;
+  const needsWarehouseSelection = needsWarehouseInput && !isPickup;
   const usesNovaPoshtaWarehouses = isNovaPoshta && needsWarehouseInput;
   const warehouseInputPlaceholder =
     form.deliveryMethod === "locker"
@@ -505,38 +559,19 @@ export function CheckoutClient({
     warehouseQuery,
   ]);
 
-  const validationErrors: CheckoutFieldErrors = {
-    firstName: form.firstName.trim() === "" ? "Введіть ім'я" : null,
-    lastName: form.lastName.trim() === "" ? "Введіть прізвище" : null,
-    phone: validatePhone(form.phone) ? null : "Введіть коректний номер телефону",
-    email: validateEmail(form.email) ? null : "Введіть коректний email",
-    deliveryCity:
-      form.deliveryCity.trim() === "" ||
-      (isNovaPoshta && form.deliveryCityRef === null)
-        ? "Вкажіть місто доставки"
-        : null,
-    deliveryWarehouse: needsWarehouseInput
-      ? usesNovaPoshtaWarehouses
-        ? form.deliveryCityRef === null
-          ? null
-          : form.deliveryWarehouseRef === null
-            ? `Оберіть ${getMethodFieldLabel(form.deliveryMethod).toLowerCase()} зі списку`
-            : null
-        : form.deliveryWarehouse.trim() === ""
-          ? `${getMethodFieldLabel(form.deliveryMethod)} є обов'язковим`
-          : null
-      : null,
-    deliveryAddress:
-      isCourier && form.deliveryAddress.trim() === "" ? "Вкажіть адресу доставки" : null,
-  };
-
-  const isFormValid = Object.values(validationErrors).every((value) => value === null);
-  const canSubmit =
+  const validationErrors = getCheckoutClientValidationErrors(form);
+  const fieldErrors = Object.fromEntries(
+    Object.keys(validationErrors).map((field) => {
+      const fieldName = field as CheckoutFieldName;
+      return [fieldName, validationErrors[fieldName] ?? serverFieldErrors[fieldName]];
+    })
+  ) as CheckoutFieldErrors;
+  const isFormValid = Object.values(fieldErrors).every((value) => value === null);
+  const canAttemptSubmit =
     items.length > 0 &&
-    isFormValid &&
     !isSubmitting &&
-    !hasUnavailableCartItems &&
-    Boolean(turnstileToken);
+    !cartLimitError &&
+    !hasUnavailableCartItems;
 
   function updateField<Key extends keyof CheckoutFormState>(
     key: Key,
@@ -546,6 +581,13 @@ export function CheckoutClient({
       ...current,
       [key]: value,
     }));
+
+    if (key in EMPTY_FIELD_ERRORS) {
+      setServerFieldErrors((current) => ({
+        ...current,
+        [key]: null,
+      }));
+    }
   }
 
   function markFieldTouched(field: CheckoutFieldName) {
@@ -560,30 +602,51 @@ export function CheckoutClient({
   }
 
   function focusFirstInvalidField(errors: CheckoutFieldErrors) {
-    const fieldOrder: Array<{
-      name: CheckoutFieldName;
-      ref: RefObject<HTMLInputElement | HTMLSelectElement | null>;
-    }> = [
-      { name: "firstName", ref: firstNameRef },
-      { name: "lastName", ref: lastNameRef },
-      { name: "phone", ref: phoneRef },
-      { name: "email", ref: emailRef },
-      { name: "deliveryCity", ref: deliveryCityRef },
-      { name: "deliveryWarehouse", ref: deliveryWarehouseRef },
-      { name: "deliveryAddress", ref: deliveryAddressRef },
-    ];
+    const firstInvalid = getFirstInvalidCheckoutField(errors);
+    const refs: Record<
+      CheckoutFieldName,
+      RefObject<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null>
+    > = {
+      firstName: firstNameRef,
+      lastName: lastNameRef,
+      phone: phoneRef,
+      email: emailRef,
+      deliveryCity: deliveryCityRef,
+      deliveryWarehouse: deliveryWarehouseRef,
+      deliveryAddress: deliveryAddressRef,
+      comment: commentRef,
+    };
+    const control = firstInvalid ? refs[firstInvalid].current : null;
 
-    const firstInvalid = fieldOrder.find((field) => errors[field.name] !== null);
-
-    if (!firstInvalid?.ref.current) {
+    if (!control) {
       return;
     }
 
-    firstInvalid.ref.current.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
+    window.requestAnimationFrame(() => {
+      control.scrollIntoView({ behavior: "smooth", block: "start" });
+      control.focus({ preventScroll: true });
     });
-    firstInvalid.ref.current.focus();
+  }
+
+  function renderFieldError(
+    field: CheckoutFieldName,
+    fallbackError: string | null = null
+  ) {
+    const error = touched[field] ? fieldErrors[field] ?? fallbackError : fallbackError;
+
+    return (
+      <span className={styles.fieldMessage} aria-live="polite">
+        {error ? (
+          <span id={getFieldErrorId(field)} className={styles.fieldError}>
+            {error}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
+  function hasVisibleFieldError(field: CheckoutFieldName) {
+    return touched[field] && Boolean(fieldErrors[field]);
   }
 
   function handleServiceChange(event: ChangeEvent<HTMLInputElement>) {
@@ -594,10 +657,17 @@ export function CheckoutClient({
       ...current,
       deliveryService: nextService,
       deliveryMethod: nextMethod,
+      deliveryCity: nextService === "pickup" ? "" : current.deliveryCity,
       deliveryCityRef: nextService === "nova_poshta" ? current.deliveryCityRef : null,
       deliveryWarehouse: "",
       deliveryWarehouseRef: null,
       deliveryAddress: "",
+    }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryCity: null,
+      deliveryWarehouse: null,
+      deliveryAddress: null,
     }));
 
     if (nextService !== "nova_poshta") {
@@ -626,6 +696,11 @@ export function CheckoutClient({
       deliveryWarehouse: "",
       deliveryWarehouseRef: null,
       deliveryAddress: nextMethod === "courier" ? current.deliveryAddress : "",
+    }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryWarehouse: null,
+      deliveryAddress: null,
     }));
 
     setWarehouseQuery("");
@@ -661,6 +736,11 @@ export function CheckoutClient({
       deliveryWarehouse: "",
       deliveryWarehouseRef: null,
     }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryCity: null,
+      deliveryWarehouse: null,
+    }));
   }
 
   function selectCity(city: NovaPoshtaCity) {
@@ -682,6 +762,11 @@ export function CheckoutClient({
       deliveryWarehouse: "",
       deliveryWarehouseRef: null,
     }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryCity: null,
+      deliveryWarehouse: null,
+    }));
     markFieldTouched("deliveryCity");
   }
 
@@ -697,6 +782,10 @@ export function CheckoutClient({
       deliveryWarehouse: value,
       deliveryWarehouseRef: null,
     }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryWarehouse: null,
+    }));
   }
 
   function selectWarehouse(warehouse: NovaPoshtaWarehouse) {
@@ -710,6 +799,10 @@ export function CheckoutClient({
       deliveryWarehouse: warehouseLabel,
       deliveryWarehouseRef: warehouse.ref,
     }));
+    setServerFieldErrors((current) => ({
+      ...current,
+      deliveryWarehouse: null,
+    }));
     markFieldTouched("deliveryWarehouse");
   }
 
@@ -720,21 +813,19 @@ export function CheckoutClient({
       return;
     }
 
-    if (!canSubmit) {
-      if (!turnstileToken) {
-        setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
-      }
+    if (!isFormValid) {
+      setSubmitError(null);
+      setTouched(ALL_FIELDS_TOUCHED);
+      focusFirstInvalidField(fieldErrors);
+      return;
+    }
 
-      setTouched({
-        firstName: true,
-        lastName: true,
-        phone: true,
-        email: true,
-        deliveryCity: true,
-        deliveryWarehouse: true,
-        deliveryAddress: true,
-      });
-      focusFirstInvalidField(validationErrors);
+    if (!turnstileToken) {
+      setSubmitError(TURNSTILE_REQUIRED_MESSAGE);
+      return;
+    }
+
+    if (!canAttemptSubmit) {
       return;
     }
 
@@ -746,17 +837,21 @@ export function CheckoutClient({
     try {
       const semanticPayload = {
         authenticated: isAuthenticated,
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
+        firstName: normalizeCheckoutName(form.firstName),
+        lastName: normalizeCheckoutName(form.lastName),
+        phone: normalizeUkrainianPhone(form.phone) ?? form.phone.trim(),
+        email: normalizeCheckoutEmail(form.email) ?? "",
         deliveryService: form.deliveryService,
         deliveryMethod: form.deliveryMethod,
-        deliveryCity: form.deliveryCity.trim(),
-        deliveryCityRef: form.deliveryCityRef,
-        deliveryWarehouse: needsWarehouseSelection ? form.deliveryWarehouse.trim() || null : null,
-        deliveryWarehouseRef: form.deliveryWarehouseRef,
-        deliveryAddress: isCourier ? form.deliveryAddress.trim() || null : null,
+        deliveryCity: isPickup ? null : form.deliveryCity.trim(),
+        deliveryCityRef: isPickup ? null : form.deliveryCityRef,
+        deliveryWarehouse:
+          !isPickup && needsWarehouseSelection
+            ? form.deliveryWarehouse.trim() || null
+            : null,
+        deliveryWarehouseRef: isPickup ? null : form.deliveryWarehouseRef,
+        deliveryAddress:
+          !isPickup && isCourier ? form.deliveryAddress.trim() || null : null,
         comment: form.comment.trim() || null,
         items: items.map((item) => ({
           productId: item.productId,
@@ -832,6 +927,34 @@ export function CheckoutClient({
           checkoutAttemptRef.current = null;
         }
 
+        const mappedErrors = mapCheckoutServerErrorToFields(
+          payload.code,
+          payload.error,
+          form
+        );
+        const mappedFields = Object.keys(mappedErrors) as CheckoutFieldName[];
+
+        if (mappedFields.length > 0) {
+          const nextErrors = {
+            ...fieldErrors,
+            ...mappedErrors,
+          } as CheckoutFieldErrors;
+
+          setServerFieldErrors((current) => ({ ...current, ...mappedErrors }));
+          setTouched((current) => {
+            const next = { ...current };
+            for (const field of mappedFields) {
+              next[field] = true;
+            }
+            return next;
+          });
+          setTurnstileToken(null);
+          turnstileRef.current?.reset();
+          setSubmitError(null);
+          focusFirstInvalidField(nextErrors);
+          return;
+        }
+
         throw new Error(payload.error ?? "Не вдалося створити замовлення.");
       }
 
@@ -859,7 +982,7 @@ export function CheckoutClient({
 
   return (
     <div className={styles.layout}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         {!isAuthenticated ? (
           <section className={`${styles.section} ${styles.checkoutNote}`}>
             <p className={styles.helper}>
@@ -885,12 +1008,16 @@ export function CheckoutClient({
                 ref={firstNameRef}
                 onChange={(event) => updateField("firstName", event.target.value)}
                 onBlur={handleFieldBlur}
-                aria-invalid={validationErrors.firstName !== null}
+                aria-invalid={hasVisibleFieldError("firstName")}
+                aria-describedby={
+                  hasVisibleFieldError("firstName")
+                    ? getFieldErrorId("firstName")
+                    : undefined
+                }
+                maxLength={CHECKOUT_NAME_MAX_LENGTH}
                 required
               />
-              {touched.firstName && validationErrors.firstName ? (
-                <span className={styles.fieldError}>{validationErrors.firstName}</span>
-              ) : null}
+              {renderFieldError("firstName")}
             </label>
 
             <label className={styles.field}>
@@ -902,12 +1029,16 @@ export function CheckoutClient({
                 ref={lastNameRef}
                 onChange={(event) => updateField("lastName", event.target.value)}
                 onBlur={handleFieldBlur}
-                aria-invalid={validationErrors.lastName !== null}
+                aria-invalid={hasVisibleFieldError("lastName")}
+                aria-describedby={
+                  hasVisibleFieldError("lastName")
+                    ? getFieldErrorId("lastName")
+                    : undefined
+                }
+                maxLength={CHECKOUT_NAME_MAX_LENGTH}
                 required
               />
-              {touched.lastName && validationErrors.lastName ? (
-                <span className={styles.fieldError}>{validationErrors.lastName}</span>
-              ) : null}
+              {renderFieldError("lastName")}
             </label>
 
             <label className={styles.field}>
@@ -919,12 +1050,14 @@ export function CheckoutClient({
                 ref={phoneRef}
                 onChange={(event) => updateField("phone", event.target.value)}
                 onBlur={handleFieldBlur}
-                aria-invalid={validationErrors.phone !== null}
+                aria-invalid={hasVisibleFieldError("phone")}
+                aria-describedby={
+                  hasVisibleFieldError("phone") ? getFieldErrorId("phone") : undefined
+                }
+                maxLength={CHECKOUT_PHONE_MAX_RAW_LENGTH}
                 required
               />
-              {touched.phone && validationErrors.phone ? (
-                <span className={styles.fieldError}>{validationErrors.phone}</span>
-              ) : null}
+              {renderFieldError("phone")}
             </label>
 
             <label className={styles.field}>
@@ -936,11 +1069,13 @@ export function CheckoutClient({
                 ref={emailRef}
                 onChange={(event) => updateField("email", event.target.value)}
                 onBlur={handleFieldBlur}
-                aria-invalid={validationErrors.email !== null}
+                aria-invalid={hasVisibleFieldError("email")}
+                aria-describedby={
+                  hasVisibleFieldError("email") ? getFieldErrorId("email") : undefined
+                }
+                maxLength={CHECKOUT_EMAIL_MAX_LENGTH}
               />
-              {touched.email && validationErrors.email ? (
-                <span className={styles.fieldError}>{validationErrors.email}</span>
-              ) : null}
+              {renderFieldError("email")}
             </label>
           </div>
         </section>
@@ -1009,22 +1144,25 @@ export function CheckoutClient({
             </label>
           </div>
 
-          <div className={styles.choiceRow}>
-            {currentMethodOptions.map((option) => (
-              <label key={option.value} className={styles.choice}>
-                <input
-                  type="radio"
-                  name="deliveryMethod"
-                  value={option.value}
-                  checked={form.deliveryMethod === option.value}
-                  onChange={handleMethodChange}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
+          {!isPickup ? (
+            <div className={styles.choiceRow}>
+              {currentMethodOptions.map((option) => (
+                <label key={option.value} className={styles.choice}>
+                  <input
+                    type="radio"
+                    name="deliveryMethod"
+                    value={option.value}
+                    checked={form.deliveryMethod === option.value}
+                    onChange={handleMethodChange}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          ) : null}
         </section>
 
+        {!isPickup ? (
         <section className={styles.section}>
           <p className={styles.eyebrow}>Дані доставки</p>
           <div className={styles.fieldGrid}>
@@ -1048,7 +1186,13 @@ export function CheckoutClient({
                       }
                     }}
                     placeholder="Почніть вводити місто"
-                    aria-invalid={validationErrors.deliveryCity !== null}
+                    aria-invalid={hasVisibleFieldError("deliveryCity")}
+                    aria-describedby={
+                      hasVisibleFieldError("deliveryCity")
+                        ? getFieldErrorId("deliveryCity")
+                        : undefined
+                    }
+                    maxLength={CHECKOUT_CITY_MAX_LENGTH}
                     autoComplete="off"
                     required
                   />
@@ -1080,9 +1224,7 @@ export function CheckoutClient({
                     </div>
                   ) : null}
                 </div>
-                {touched.deliveryCity && validationErrors.deliveryCity ? (
-                  <span className={styles.fieldError}>{validationErrors.deliveryCity}</span>
-                ) : null}
+                {renderFieldError("deliveryCity")}
               </label>
             ) : (
               <label className={styles.field}>
@@ -1094,12 +1236,16 @@ export function CheckoutClient({
                   ref={deliveryCityRef}
                   onChange={(event) => updateField("deliveryCity", event.target.value)}
                   onBlur={handleFieldBlur}
-                  aria-invalid={validationErrors.deliveryCity !== null}
+                  aria-invalid={hasVisibleFieldError("deliveryCity")}
+                  aria-describedby={
+                    hasVisibleFieldError("deliveryCity")
+                      ? getFieldErrorId("deliveryCity")
+                      : undefined
+                  }
+                  maxLength={CHECKOUT_CITY_MAX_LENGTH}
                   required
                 />
-                {touched.deliveryCity && validationErrors.deliveryCity ? (
-                  <span className={styles.fieldError}>{validationErrors.deliveryCity}</span>
-                ) : null}
+                {renderFieldError("deliveryCity")}
               </label>
             )}
 
@@ -1126,7 +1272,13 @@ export function CheckoutClient({
                       }
                     }}
                     placeholder={warehouseInputPlaceholder}
-                    aria-invalid={validationErrors.deliveryWarehouse !== null}
+                    aria-invalid={hasVisibleFieldError("deliveryWarehouse")}
+                    aria-describedby={
+                      hasVisibleFieldError("deliveryWarehouse") || warehouseSearchError
+                        ? getFieldErrorId("deliveryWarehouse")
+                        : undefined
+                    }
+                    maxLength={CHECKOUT_WAREHOUSE_MAX_LENGTH}
                     autoComplete="off"
                     disabled={!form.deliveryCityRef}
                     required
@@ -1171,18 +1323,13 @@ export function CheckoutClient({
                     </div>
                   ) : null}
                 </div>
-                {warehouseSearchError ? (
-                  <span className={styles.fieldError}>{warehouseSearchError}</span>
-                ) : null}
-                {touched.deliveryWarehouse && validationErrors.deliveryWarehouse ? (
-                  <span className={styles.fieldError}>{validationErrors.deliveryWarehouse}</span>
-                ) : null}
+                {renderFieldError("deliveryWarehouse", warehouseSearchError)}
               </label>
             ) : null}
 
             {!isNovaPoshta && needsWarehouseSelection ? (
               <label className={styles.field}>
-                <span>{getMethodFieldLabel(form.deliveryMethod)}</span>
+                <span>{getMethodFieldLabel(form.deliveryMethod)} *</span>
                 <input
                   type="text"
                   name="deliveryWarehouse"
@@ -1190,11 +1337,16 @@ export function CheckoutClient({
                   ref={deliveryWarehouseRef as RefObject<HTMLInputElement>}
                   onChange={(event) => updateField("deliveryWarehouse", event.target.value)}
                   onBlur={() => markFieldTouched("deliveryWarehouse")}
-                  aria-invalid={validationErrors.deliveryWarehouse !== null}
+                  aria-invalid={hasVisibleFieldError("deliveryWarehouse")}
+                  aria-describedby={
+                    hasVisibleFieldError("deliveryWarehouse")
+                      ? getFieldErrorId("deliveryWarehouse")
+                      : undefined
+                  }
+                  maxLength={CHECKOUT_WAREHOUSE_MAX_LENGTH}
+                  required
                 />
-                {touched.deliveryWarehouse && validationErrors.deliveryWarehouse ? (
-                  <span className={styles.fieldError}>{validationErrors.deliveryWarehouse}</span>
-                ) : null}
+                {renderFieldError("deliveryWarehouse")}
               </label>
             ) : null}
 
@@ -1208,29 +1360,48 @@ export function CheckoutClient({
                   ref={deliveryAddressRef}
                   onChange={(event) => updateField("deliveryAddress", event.target.value)}
                   onBlur={() => markFieldTouched("deliveryAddress")}
-                  aria-invalid={validationErrors.deliveryAddress !== null}
+                  aria-invalid={hasVisibleFieldError("deliveryAddress")}
+                  aria-describedby={
+                    hasVisibleFieldError("deliveryAddress")
+                      ? getFieldErrorId("deliveryAddress")
+                      : undefined
+                  }
+                  maxLength={CHECKOUT_ADDRESS_MAX_LENGTH}
+                  required
                 />
-                {touched.deliveryAddress && validationErrors.deliveryAddress ? (
-                  <span className={styles.fieldError}>{validationErrors.deliveryAddress}</span>
-                ) : null}
+                {renderFieldError("deliveryAddress")}
               </label>
             ) : null}
 
-            <label className={`${styles.field} ${styles.fieldFull}`}>
-              <span>Коментар до замовлення</span>
-              <textarea
-                rows={4}
-                value={form.comment}
-                onChange={(event) => updateField("comment", event.target.value)}
-              />
-            </label>
           </div>
+        </section>
+        ) : null}
+
+        <section className={styles.section}>
+          <label className={styles.field}>
+            <span>Коментар до замовлення</span>
+            <textarea
+              name="comment"
+              rows={4}
+              value={form.comment}
+              ref={commentRef}
+              onChange={(event) => updateField("comment", event.target.value)}
+              onBlur={() => markFieldTouched("comment")}
+              aria-invalid={hasVisibleFieldError("comment")}
+              aria-describedby={
+                hasVisibleFieldError("comment") ? getFieldErrorId("comment") : undefined
+              }
+              maxLength={CHECKOUT_COMMENT_MAX_LENGTH}
+            />
+            {renderFieldError("comment")}
+          </label>
         </section>
 
         {submitError ? <p className={styles.error}>{submitError}</p> : null}
         {cartAvailabilityMessage ? (
           <p className={styles.error}>{cartAvailabilityMessage}</p>
         ) : null}
+        {cartLimitError ? <p className={styles.error}>{cartLimitError}</p> : null}
 
         <div className={styles.submitRow}>
           {developmentWarning ? <p className={styles.warning}>{developmentWarning}</p> : null}
@@ -1259,14 +1430,9 @@ export function CheckoutClient({
               setSubmitError(TURNSTILE_LOAD_ERROR_MESSAGE);
             }}
           />
-          <Button type="submit" size="large" disabled={!canSubmit}>
+          <Button type="submit" size="large" disabled={!canAttemptSubmit}>
             {isSubmitting ? "Оформляємо..." : "Оформити замовлення"}
           </Button>
-          {!isFormValid ? (
-            <p className={styles.helper}>
-              Заповніть обов&apos;язкові поля для оформлення замовлення.
-            </p>
-          ) : null}
           {items.length === 0 ? (
             <p className={styles.helper}>Кошик порожній. Додайте товари перед оформленням.</p>
           ) : null}

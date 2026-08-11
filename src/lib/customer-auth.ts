@@ -4,12 +4,21 @@ import type { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export const CUSTOMER_ACCESS_TOKEN_COOKIE = "specwear_customer_access_token";
-export const CUSTOMER_REFRESH_TOKEN_COOKIE = "specwear_customer_refresh_token";
+import {
+  CUSTOMER_ACCESS_TOKEN_COOKIE,
+  CUSTOMER_REFRESH_TOKEN_COOKIE,
+  getCustomerSessionCookieOptions,
+  type CustomerCookieReader,
+} from "./customer-session-cookies";
 
-type CookieReader = {
-  get(name: string): { value: string } | undefined;
-};
+export {
+  clearCustomerSessionCookies,
+  CUSTOMER_ACCESS_TOKEN_COOKIE,
+  CUSTOMER_REFRESH_TOKEN_COOKIE,
+  hasCustomerSessionCookie,
+} from "./customer-session-cookies";
+
+type CookieReader = CustomerCookieReader;
 
 function getSupabaseUrl() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,39 +65,16 @@ export function createServerSupabaseCustomerAuthClient() {
 
 export function setCustomerSessionCookies(response: NextResponse, session: Session) {
   const secure = process.env.NODE_ENV === "production";
+  const cookieOptions = getCustomerSessionCookieOptions(secure);
 
   response.cookies.set(CUSTOMER_ACCESS_TOKEN_COOKIE, session.access_token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    path: "/",
+    ...cookieOptions,
     maxAge: session.expires_in ?? 60 * 60,
   });
 
   response.cookies.set(CUSTOMER_REFRESH_TOKEN_COOKIE, session.refresh_token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    path: "/",
+    ...cookieOptions,
     maxAge: 60 * 60 * 24 * 30,
-  });
-}
-
-export function clearCustomerSessionCookies(response: NextResponse) {
-  response.cookies.set(CUSTOMER_ACCESS_TOKEN_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set(CUSTOMER_REFRESH_TOKEN_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
   });
 }
 

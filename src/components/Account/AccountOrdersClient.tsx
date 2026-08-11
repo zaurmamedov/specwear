@@ -10,6 +10,7 @@ import {
   getDeliveryMethodLabel,
   getDeliveryServiceLabel,
   getOrderStatusLabel,
+  isPickupDelivery,
 } from "@/lib/order-labels";
 import { useCartStore } from "@/stores/cart.store";
 import type { OrderWithItems, OrderStatus } from "@/types/order";
@@ -96,7 +97,11 @@ export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
               </div>
               <div className={styles.orderMetaBlock}>
                 <strong>Доставка</strong>
-                <span>{order.delivery_city}</span>
+                <span>
+                  {isPickupDelivery(order.delivery_service, order.delivery_method)
+                    ? "Самовивіз"
+                    : order.delivery_city}
+                </span>
               </div>
               <div className={styles.orderMetaBlock}>
                 <strong>Позицій</strong>
@@ -115,30 +120,39 @@ export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
                   <strong>Телефон</strong>
                   <span>{order.phone}</span>
                 </div>
-                <div className={styles.orderMetaBlock}>
-                  <strong>Служба доставки</strong>
-                  <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
-                </div>
-                <div className={styles.orderMetaBlock}>
-                  <strong>Спосіб доставки</strong>
-                  <span>{getDeliveryMethodLabel(order.delivery_method)}</span>
-                </div>
-                <div className={styles.orderMetaBlock}>
-                  <strong>Місто</strong>
-                  <span>{order.delivery_city}</span>
-                </div>
-                {order.delivery_warehouse ? (
+                {isPickupDelivery(order.delivery_service, order.delivery_method) ? (
                   <div className={styles.orderMetaBlock}>
-                    <strong>Відділення / поштомат</strong>
-                    <span>{order.delivery_warehouse}</span>
+                    <strong>Доставка</strong>
+                    <span>Самовивіз</span>
                   </div>
-                ) : null}
-                {order.delivery_address ? (
-                  <div className={styles.orderMetaBlock}>
-                    <strong>Адреса</strong>
-                    <span>{order.delivery_address}</span>
-                  </div>
-                ) : null}
+                ) : (
+                  <>
+                    <div className={styles.orderMetaBlock}>
+                      <strong>Служба доставки</strong>
+                      <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
+                    </div>
+                    <div className={styles.orderMetaBlock}>
+                      <strong>Спосіб доставки</strong>
+                      <span>{getDeliveryMethodLabel(order.delivery_method)}</span>
+                    </div>
+                    <div className={styles.orderMetaBlock}>
+                      <strong>Місто</strong>
+                      <span>{order.delivery_city}</span>
+                    </div>
+                    {order.delivery_warehouse ? (
+                      <div className={styles.orderMetaBlock}>
+                        <strong>Відділення / поштомат</strong>
+                        <span>{order.delivery_warehouse}</span>
+                      </div>
+                    ) : null}
+                    {order.delivery_address ? (
+                      <div className={styles.orderMetaBlock}>
+                        <strong>Адреса</strong>
+                        <span>{order.delivery_address}</span>
+                      </div>
+                    ) : null}
+                  </>
+                )}
                 {order.comment ? (
                   <div className={`${styles.orderMetaBlock} ${styles.deliveryComment}`}>
                     <strong>Коментар</strong>

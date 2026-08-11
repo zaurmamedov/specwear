@@ -8,7 +8,11 @@ import {
 } from "@/components/AdminOrders";
 import styles from "@/components/AdminOrders/AdminOrders.module.css";
 import { isSupabaseStorageUrl, isValidImageUrl } from "@/lib/images";
-import { getDeliveryMethodLabel, getDeliveryServiceLabel } from "@/lib/order-labels";
+import {
+  getDeliveryMethodLabel,
+  getDeliveryServiceLabel,
+  isPickupDelivery,
+} from "@/lib/order-labels";
 import { getOrderById } from "@/services/orders.service";
 
 export const dynamic = "force-dynamic";
@@ -95,26 +99,35 @@ export default async function OrderDetailsPage({ params }: OrderDetailsPageProps
           <section className={styles.detailSection}>
             <h2 className={styles.sectionTitle}>Доставка</h2>
             <div className={styles.detailList}>
-              <div className={styles.detailListRow}>
-                <span className={styles.detailLabel}>Сервіс</span>
-                <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
-              </div>
-              <div className={styles.detailListRow}>
-                <span className={styles.detailLabel}>Спосіб</span>
-                <span>{getDeliveryMethodLabel(order.delivery_method)}</span>
-              </div>
-              <div className={styles.detailListRow}>
-                <span className={styles.detailLabel}>Місто</span>
-                <span>{order.delivery_city}</span>
-              </div>
-              <div className={styles.detailListRow}>
-                <span className={styles.detailLabel}>Відділення / поштомат</span>
-                <span>{order.delivery_warehouse || "Не вказано"}</span>
-              </div>
-              <div className={styles.detailListRow}>
-                <span className={styles.detailLabel}>Адреса</span>
-                <span>{order.delivery_address || "Не вказано"}</span>
-              </div>
+              {isPickupDelivery(order.delivery_service, order.delivery_method) ? (
+                <div className={styles.detailListRow}>
+                  <span className={styles.detailLabel}>Доставка</span>
+                  <span>Самовивіз</span>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.detailListRow}>
+                    <span className={styles.detailLabel}>Сервіс</span>
+                    <span>{getDeliveryServiceLabel(order.delivery_service)}</span>
+                  </div>
+                  <div className={styles.detailListRow}>
+                    <span className={styles.detailLabel}>Спосіб</span>
+                    <span>{getDeliveryMethodLabel(order.delivery_method)}</span>
+                  </div>
+                  <div className={styles.detailListRow}>
+                    <span className={styles.detailLabel}>Місто</span>
+                    <span>{order.delivery_city}</span>
+                  </div>
+                  <div className={styles.detailListRow}>
+                    <span className={styles.detailLabel}>Відділення / поштомат</span>
+                    <span>{order.delivery_warehouse || "Не вказано"}</span>
+                  </div>
+                  <div className={styles.detailListRow}>
+                    <span className={styles.detailLabel}>Адреса</span>
+                    <span>{order.delivery_address || "Не вказано"}</span>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

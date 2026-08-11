@@ -1,0 +1,9 @@
+.error {
+  max-width: 18rem;
+  margin: 0.5rem 0 0;
+  color: #b91c1c;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

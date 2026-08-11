@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import {
   getCustomerAccessTokenFromCookieStore,
   getCustomerUserFromCookieStore,
+  hasCustomerSessionCookie,
 } from "@/lib/customer-auth";
 import {
   createCheckoutRequestFingerprint,
@@ -18,9 +19,12 @@ import {
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
 import { sendOrderTelegramNotification } from "@/lib/telegram";
 import {
-  CheckoutPricingError,
-  parseCheckoutCartItems,
-} from "@/lib/checkout-pricing";
+  assertValidCheckoutSessionAttempt,
+  CheckoutValidationError,
+  readCheckoutJsonRequest,
+  validateCheckoutInput,
+} from "@/lib/checkout-validation";
+import { CheckoutPricingError } from "@/lib/checkout-pricing";
 import { upsertProfileForUser } from "@/services/account.service";
 import {
   createCheckoutOrderAtomically,
@@ -35,20 +39,9 @@ import {
   getTrustedCheckoutPricingContext,
 } from "@/services/checkout-pricing.service";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function getOptionalString(value: unknown) {
-  const normalized = getString(value);
-  return normalized || null;
-}
-
 class CheckoutTurnstileError extends Error {
+  readonly code = "CHECKOUT_TURNSTILE_FAILED";
+
   constructor() {
     super(TURNSTILE_FAILURE_MESSAGE);
     this.name = "CheckoutTurnstileError";
@@ -57,50 +50,44 @@ class CheckoutTurnstileError extends Error {
 
 export async function POST(request: Request) {
   try {
-    const parsedBody = (await request.json()) as unknown;
-
-    if (!isRecord(parsedBody)) {
-      return NextResponse.json(
-        { error: "Некоректні дані замовлення." },
-        { status: 400 }
-      );
-    }
-
-    const body = parsedBody;
+    const parsedBody = await readCheckoutJsonRequest(request);
+    const input = validateCheckoutInput(parsedBody);
     const idempotencyKey = parseCheckoutIdempotencyKey(
       request.headers.get("Idempotency-Key")
     );
-    const firstName = getString(body.firstName);
-    const lastName = getString(body.lastName);
-    const phone = getString(body.phone);
-    const email = getString(body.email);
-    const deliveryService = getString(body.deliveryService);
-    const deliveryMethod = getString(body.deliveryMethod);
-    const deliveryCity = getString(body.deliveryCity);
-    const deliveryCityRef = getOptionalString(body.deliveryCityRef);
-    const deliveryWarehouse = getOptionalString(body.deliveryWarehouse);
-    const deliveryWarehouseRef = getOptionalString(body.deliveryWarehouseRef);
-    const deliveryAddress = getOptionalString(body.deliveryAddress);
-    const comment = getOptionalString(body.comment);
-
-    if (!firstName || !lastName || !phone) {
-      return NextResponse.json(
-        { error: "Недостатньо даних для оформлення замовлення." },
-        { status: 400 }
-      );
-    }
-
-    const normalizedItems = parseCheckoutCartItems(body.items);
+    const {
+      firstName,
+      lastName,
+      phone,
+      email,
+      deliveryService,
+      deliveryMethod,
+      deliveryCity,
+      deliveryCityRef,
+      deliveryWarehouse,
+      deliveryWarehouseRef,
+      deliveryAddress,
+      comment,
+      items: normalizedItems,
+      turnstileToken,
+    } = input;
     const cookieStore = await cookies();
     const customerAccessToken =
       getCustomerAccessTokenFromCookieStore(cookieStore);
     const customerUser = await getCustomerUserFromCookieStore(cookieStore);
+    const hasAttemptedCustomerSession = hasCustomerSessionCookie(cookieStore);
+
+    assertValidCheckoutSessionAttempt(
+      hasAttemptedCustomerSession,
+      Boolean(customerUser)
+    );
+
     const userId = customerUser?.id ?? null;
     const contact: CheckoutOrderContactData = {
       firstName,
       lastName,
       phone,
-      email: email || null,
+      email,
       deliveryService,
       deliveryMethod,
       deliveryCity,
@@ -136,7 +123,7 @@ export async function POST(request: Request) {
         }),
       prepare: async () => {
         const turnstileVerification = await verifyTurnstileToken(
-          getString(body.turnstileToken),
+          turnstileToken,
           getTurnstileRemoteIp(request),
           idempotencyKey
         );
@@ -181,14 +168,17 @@ export async function POST(request: Request) {
               first_name: firstName,
               last_name: lastName,
               phone,
-              email: email || customerUser.email || null,
+              email: email ?? customerUser.email ?? null,
               delivery_service: deliveryService,
               delivery_method: deliveryMethod,
-              delivery_city: deliveryCity,
-              delivery_city_ref: deliveryCityRef,
-              delivery_warehouse: deliveryWarehouse,
-              delivery_warehouse_ref: deliveryWarehouseRef,
-              delivery_address: deliveryAddress,
+              delivery_city: deliveryService === "pickup" ? null : deliveryCity,
+              delivery_city_ref: deliveryService === "pickup" ? null : deliveryCityRef,
+              delivery_warehouse:
+                deliveryService === "pickup" ? null : deliveryWarehouse,
+              delivery_warehouse_ref:
+                deliveryService === "pickup" ? null : deliveryWarehouseRef,
+              delivery_address:
+                deliveryService === "pickup" ? null : deliveryAddress,
               customer_type: prepared.customerType,
             });
           } catch (profileError) {
@@ -204,7 +194,7 @@ export async function POST(request: Request) {
           firstName,
           lastName,
           phone,
-          email: email || null,
+          email,
           deliveryService,
           deliveryMethod,
           deliveryCity,
@@ -255,6 +245,17 @@ export async function POST(request: Request) {
       reused: result.outcome === "reused",
     });
   } catch (error) {
+    if (error instanceof CheckoutValidationError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: error.code,
+          error: error.message,
+        },
+        { status: error.httpStatus }
+      );
+    }
+
     if (error instanceof CheckoutIdempotencyKeyError) {
       return NextResponse.json(
         {
@@ -267,11 +268,21 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CheckoutTurnstileError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        { success: false, code: error.code, error: error.message },
+        { status: 400 }
+      );
     }
 
     if (error instanceof CheckoutPricingError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          code: error.code,
+          error: error.message,
+        },
+        { status: error.httpStatus }
+      );
     }
 
     if (error instanceof CheckoutProfileLookupError) {
@@ -279,7 +290,6 @@ export async function POST(request: Request) {
         {
           success: false,
           code: error.code,
-          message: error.message,
           error: error.message,
         },
         { status: 500 }
@@ -303,7 +313,6 @@ export async function POST(request: Request) {
       {
         success: false,
         code: "CHECKOUT_ORDER_FAILED",
-        message: "Не вдалося оформити замовлення. Спробуйте ще раз.",
         error: "Не вдалося оформити замовлення. Спробуйте ще раз.",
       },
       { status: 500 }

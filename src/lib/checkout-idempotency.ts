@@ -29,7 +29,7 @@ export type CheckoutFingerprintInput = {
   firstName: string;
   lastName: string;
   phone: string;
-  email: string;
+  email: string | null;
   deliveryService: string;
   deliveryMethod: string;
   deliveryCity: string;

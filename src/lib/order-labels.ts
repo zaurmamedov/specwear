@@ -30,6 +30,13 @@ export function getDeliveryMethodLabel(method: string | null | undefined) {
   }
 }
 
+export function isPickupDelivery(
+  service: string | null | undefined,
+  method?: string | null
+) {
+  return service === "pickup" || method === "pickup";
+}
+
 export function getOrderStatusLabel(status: OrderStatus) {
   switch (status) {
     case "new":

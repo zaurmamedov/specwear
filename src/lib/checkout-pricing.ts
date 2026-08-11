@@ -1,3 +1,5 @@
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "./checkout-validation.shared.ts";
+
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 const UUID_PATTERN =
@@ -78,9 +80,19 @@ export type AuthoritativeCheckoutPricing = {
 };
 
 export class CheckoutPricingError extends Error {
-  constructor(message: string) {
+  readonly code: "CHECKOUT_PRICING_INVALID" | "CHECKOUT_CART_LIMIT_EXCEEDED";
+  readonly httpStatus: 400 | 422;
+
+  constructor(
+    message: string,
+    code: "CHECKOUT_PRICING_INVALID" | "CHECKOUT_CART_LIMIT_EXCEEDED" =
+      "CHECKOUT_PRICING_INVALID",
+    httpStatus: 400 | 422 = 400
+  ) {
     super(message);
     this.name = "CheckoutPricingError";
+    this.code = code;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -134,9 +146,13 @@ export function parseCheckoutCartItems(value: unknown): CheckoutCartItem[] {
     }
 
     const productId =
-      typeof rawItem.productId === "string" ? rawItem.productId.trim() : "";
+      typeof rawItem.productId === "string"
+        ? rawItem.productId.trim().toLowerCase()
+        : "";
     const rawVariantId =
-      typeof rawItem.variantId === "string" ? rawItem.variantId.trim() : "";
+      typeof rawItem.variantId === "string"
+        ? rawItem.variantId.trim().toLowerCase()
+        : "";
     const variantId = rawVariantId || null;
     const quantity = rawItem.quantity;
 
@@ -297,6 +313,14 @@ export function calculateAuthoritativeCheckoutPricing(input: {
           "Загальна кількість товару перевищує допустиме значення."
         )
       : item.quantity;
+
+    if (quantity > CHECKOUT_CART_MAX_LINE_QUANTITY) {
+      throw new CheckoutPricingError(
+        `Кількість одного товару не може перевищувати ${CHECKOUT_CART_MAX_LINE_QUANTITY}.`,
+        "CHECKOUT_CART_LIMIT_EXCEEDED",
+        422
+      );
+    }
 
     resolvedItems.set(resolvedKey, {
       product,

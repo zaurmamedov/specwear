@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:checkout": "node --test --experimental-strip-types src/lib/checkout-pricing.test.mts src/lib/checkout-idempotency.test.mts src/lib/checkout-inventory.test.mts",
+    "test:checkout": "node --test --experimental-strip-types src/lib/checkout-validation.test.mts src/lib/checkout-client-validation.test.mts src/lib/customer-session-cookies.test.mts src/lib/checkout-pricing.test.mts src/lib/checkout-idempotency.test.mts src/lib/checkout-inventory.test.mts",
+    "test:checkout-validation": "node --test --experimental-strip-types src/lib/checkout-validation.test.mts",
+    "test:checkout-ux": "node --test --experimental-strip-types src/lib/checkout-client-validation.test.mts src/lib/customer-session-cookies.test.mts",
     "test:checkout-idempotency": "node --test --experimental-strip-types src/lib/checkout-idempotency.test.mts",
     "test:inventory": "node --test --experimental-strip-types src/lib/checkout-inventory.test.mts",
     "test:inventory:integration": "node scripts/checkout-inventory.integration.mjs"

@@ -62,6 +62,7 @@
 .field {
   display: grid;
   gap: 0.5rem;
+  align-content: start;
 }
 
 .fieldFull {
@@ -74,7 +75,15 @@
   font-weight: 700;
 }
 
+.fieldMessage {
+  display: block;
+  min-height: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .fieldError {
+  display: block;
   color: #b91c1c;
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -91,6 +100,7 @@
   background: rgba(17, 19, 21, 0.02);
   color: var(--color-dark);
   font: inherit;
+  scroll-margin-top: 7rem;
 }
 
 .field textarea {
