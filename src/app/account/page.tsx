@@ -20,9 +20,6 @@ export default async function AccountPage() {
           Тут можна переглядати свої замовлення, зберігати контактні дані та швидко
           повертатися до каталогу.
         </p>
-        {profile?.customer_type === "wholesale" && profile.is_wholesale_approved ? (
-          <span className={styles.badge}>Оптовий клієнт</span>
-        ) : null}
         <div className={styles.heroActions}>
           <Button href="/account/orders">Мої замовлення</Button>
           <Button href="/account/settings" variant="secondary">

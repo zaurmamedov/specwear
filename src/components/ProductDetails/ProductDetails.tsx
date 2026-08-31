@@ -3,20 +3,23 @@ import Link from "next/link";
 import { BackButton } from "@/components/BackButton";
 import { isValidImageUrl } from "@/lib/images";
 import type { Category } from "@/types/category";
-import type { ProductCardData, ProductImage } from "@/types/product";
+import type {
+  PublicProductDetails,
+  PublicProductImage,
+} from "@/types/product";
 
 import { ProductDetailsActions } from "./ProductDetailsActions";
 import { ProductDetailsGallery } from "./ProductDetailsGallery";
 import styles from "./ProductDetails.module.css";
 
 type ProductDetailsProps = {
-  product: ProductCardData;
+  product: PublicProductDetails;
   categoryPath?: Category[];
 };
 
-function getGalleryImages(product: ProductCardData): ProductImage[] {
+function getGalleryImages(product: PublicProductDetails): PublicProductImage[] {
   const validProductImages = product.product_images.filter(
-    (image): image is ProductImage => isValidImageUrl(image.image_url)
+    (image): image is PublicProductImage => isValidImageUrl(image.image_url)
   );
 
   if (validProductImages.length > 0) {
@@ -29,11 +32,8 @@ function getGalleryImages(product: ProductCardData): ProductImage[] {
     return [
       {
         id: `${product.id}-main`,
-        product_id: product.id,
         image_url: fallbackImageUrl,
         alt: product.name,
-        sort_order: 0,
-        created_at: product.created_at,
       },
     ];
   }

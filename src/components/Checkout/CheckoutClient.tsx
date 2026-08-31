@@ -48,7 +48,6 @@ import { useCartStore } from "@/stores/cart.store";
 
 import styles from "./Checkout.module.css";
 
-type CustomerType = "retail" | "wholesale";
 type DeliveryService = "nova_poshta" | "ukrposhta" | "pickup";
 type DeliveryMethod = "branch" | "locker" | "courier" | "pickup";
 
@@ -57,7 +56,6 @@ type CheckoutFormState = {
   lastName: string;
   phone: string;
   email: string;
-  customerType: CustomerType;
   deliveryService: DeliveryService;
   deliveryMethod: DeliveryMethod;
   deliveryCity: string;
@@ -106,7 +104,6 @@ type CheckoutProfileData = {
   lastName: string;
   phone: string;
   email: string;
-  customerType: CustomerType;
   deliveryService: DeliveryService;
   deliveryMethod: DeliveryMethod;
   deliveryCity: string;
@@ -121,7 +118,6 @@ const initialFormState: CheckoutFormState = {
   lastName: "",
   phone: "+380",
   email: "",
-  customerType: "retail",
   deliveryService: "nova_poshta",
   deliveryMethod: "branch",
   deliveryCity: "",
@@ -159,7 +155,6 @@ function createInitialFormState(profile?: CheckoutProfileData | null): CheckoutF
     lastName: profile.lastName || "",
     phone: profile.phone || "+380",
     email: profile.email || "",
-    customerType: profile.customerType || "retail",
     deliveryService,
     deliveryMethod,
     deliveryCity: profile.deliveryCity || "",
@@ -1076,33 +1071,6 @@ export function CheckoutClient({
                 maxLength={CHECKOUT_EMAIL_MAX_LENGTH}
               />
               {renderFieldError("email")}
-            </label>
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <p className={styles.eyebrow}>Тип клієнта</p>
-          <div className={styles.choiceRow}>
-            <label className={styles.choice}>
-              <input
-                type="radio"
-                name="customerType"
-                value="retail"
-                checked={form.customerType === "retail"}
-                onChange={() => updateField("customerType", "retail")}
-              />
-              <span>Роздрібний</span>
-            </label>
-
-            <label className={styles.choice}>
-              <input
-                type="radio"
-                name="customerType"
-                value="wholesale"
-                checked={form.customerType === "wholesale"}
-                onChange={() => updateField("customerType", "wholesale")}
-              />
-              <span>Оптовий</span>
             </label>
           </div>
         </section>

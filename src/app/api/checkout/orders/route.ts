@@ -179,7 +179,6 @@ export async function POST(request: Request) {
                 deliveryService === "pickup" ? null : deliveryWarehouseRef,
               delivery_address:
                 deliveryService === "pickup" ? null : deliveryAddress,
-              customer_type: prepared.customerType,
             });
           } catch (profileError) {
             console.error(

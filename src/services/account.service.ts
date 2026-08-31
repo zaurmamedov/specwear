@@ -24,7 +24,6 @@ type UpsertProfileInput = {
   delivery_warehouse?: string | null;
   delivery_warehouse_ref?: string | null;
   delivery_address?: string | null;
-  customer_type?: "retail" | "wholesale";
 };
 
 type RepeatableOrderResult = {
@@ -188,10 +187,13 @@ export async function getOrCreateProfileForUser(
     return existingProfile;
   }
 
-  await upsertProfileForUser(user, {
-    email: user.email ?? null,
-    customer_type: "retail",
-  }, accessToken);
+  await upsertProfileForUser(
+    user,
+    {
+      email: user.email ?? null,
+    },
+    accessToken
+  );
 
   return getProfileByUserId(user.id);
 }
@@ -210,8 +212,7 @@ export async function upsertProfileForUser(
     throw new Error("Failed to save profile: customer session is missing.");
   }
 
-  const payload = {
-    id: user.id,
+  const customerEditablePayload = {
     email: input.email ?? user.email ?? null,
     first_name: input.first_name ?? null,
     last_name: input.last_name ?? null,
@@ -223,14 +224,7 @@ export async function upsertProfileForUser(
     delivery_warehouse: input.delivery_warehouse ?? null,
     delivery_warehouse_ref: input.delivery_warehouse_ref ?? null,
     delivery_address: input.delivery_address ?? null,
-    customer_type: input.customer_type ?? "retail",
   };
-
-  console.log("Profile upsert attempt", {
-    userId: user.id,
-    payloadId: payload.id,
-    hasAccessToken: Boolean(accessToken && accessToken.trim() !== ""),
-  });
 
   const { data: existingProfile, error: selectError } = await supabase
     .from("profiles")
@@ -245,7 +239,7 @@ export async function upsertProfileForUser(
   if (existingProfile?.id) {
     const { error: updateError } = await supabase
       .from("profiles")
-      .update(payload)
+      .update(customerEditablePayload)
       .eq("id", user.id);
 
     if (updateError) {
@@ -257,7 +251,10 @@ export async function upsertProfileForUser(
 
   const { error: insertError } = await supabase
     .from("profiles")
-    .insert(payload);
+    .insert({
+      id: user.id,
+      ...customerEditablePayload,
+    });
 
   if (insertError) {
     throw new Error(`Failed to save profile: ${insertError.message}`);

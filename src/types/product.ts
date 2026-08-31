@@ -63,3 +63,36 @@ export interface ProductCardData extends Product {
   product_images: ProductImage[];
   product_variants: ProductVariant[];
 }
+
+export interface PublicProductImage {
+  id: string;
+  image_url: string;
+  alt: string | null;
+}
+
+export interface PublicProductVariant {
+  id: string;
+  sku: string | null;
+  size: string | null;
+  color: string | null;
+  retail_price: number;
+  old_price: number | null;
+  is_available: boolean;
+}
+
+export interface PublicProductDetails {
+  id: string;
+  category_id: string | null;
+  name: string;
+  slug: string;
+  model: string | null;
+  short_description: string | null;
+  description: string | null;
+  seo_description: string | null;
+  main_image_url: string | null;
+  status: ProductStatus;
+  brand: Pick<Brand, "name"> | null;
+  category: Pick<Category, "id" | "name" | "slug"> | null;
+  product_images: PublicProductImage[];
+  product_variants: PublicProductVariant[];
+}

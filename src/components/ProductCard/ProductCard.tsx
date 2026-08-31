@@ -195,7 +195,6 @@ export function ProductCard({ product }: ProductCardProps) {
             sku={sku}
             retailPrice={retailPrice}
             oldPrice={oldPrice}
-            stockQuantity={primaryVariant?.stock_quantity ?? null}
             categoryName={product.category?.name ?? null}
             brandName={product.brand?.name ?? null}
             canAddToCart={canAddToCart}

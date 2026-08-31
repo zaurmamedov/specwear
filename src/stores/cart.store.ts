@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import type { CartItem } from "@/types/store";
 
 type AddCartItemInput = Omit<CartItem, "quantity"> & {
@@ -34,7 +35,7 @@ function getItemStockLimit(item: Pick<CartItem, "stockQuantity" | "quantity">) {
     return item.stockQuantity;
   }
 
-  return Math.max(1, item.quantity);
+  return CHECKOUT_CART_MAX_LINE_QUANTITY;
 }
 
 function clampCartQuantity(

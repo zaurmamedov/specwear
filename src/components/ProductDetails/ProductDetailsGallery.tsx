@@ -4,14 +4,14 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { isSupabaseStorageUrl } from "@/lib/images";
-import type { ProductImage } from "@/types/product";
+import type { PublicProductImage } from "@/types/product";
 
 import styles from "./ProductDetails.module.css";
 
 type ProductDetailsGalleryProps = {
   productName: string;
   categoryName: string | null;
-  images: ProductImage[];
+  images: PublicProductImage[];
 };
 
 export function ProductDetailsGallery({

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { cache } from "react";
 
 import { getCategoryPath } from "@/lib/categories";
@@ -6,9 +8,16 @@ import {
   isProductPurchasableStatus,
   isProductUnavailableStatus,
 } from "@/lib/product-status";
-import { supabase } from "@/lib/supabase/client";
+import {
+  toPublicProductVariants,
+  type PublicProductVariantSource,
+} from "@/lib/public-product";
+import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import { getCategories } from "@/services/categories.service";
-import type { ProductCardData } from "@/types/product";
+import type {
+  ProductCardData,
+  PublicProductDetails,
+} from "@/types/product";
 
 export type AvailabilityFilter = "in_stock" | "out_of_stock";
 
@@ -54,13 +63,6 @@ const productSelect = `
   category:categories(id, name, slug),
   product_images(*),
   product_variants(*)
-`;
-
-const productDetailsSelect = `
-  *,
-  brand:brands(*),
-  category:categories(id, name, slug),
-  product_images(*)
 `;
 
 function sortProductImages<T extends { sort_order: number; created_at: string }>(images: T[]) {
@@ -109,15 +111,8 @@ function normalizeCatalogRows(data: ProductCardData[] | null | undefined) {
     }));
 }
 
-function normalizeProductDetailsRow(product: ProductCardData) {
-  return {
-    ...product,
-    product_images: sortProductImages(product.product_images ?? []),
-    product_variants: sortProductVariants(product.product_variants ?? []),
-  };
-}
-
 const getCatalogProductsDataset = cache(async (): Promise<ProductCardData[]> => {
+  const supabase = createServerSupabaseAdminClient();
   const { data, error } = await supabase
     .from("products")
     .select(productSelect)
@@ -472,15 +467,30 @@ export async function getProductFilterPreviewData(): Promise<ProductFilterPrevie
 }
 
 export const getProductBySlug = cache(
-  async (slug: string): Promise<ProductCardData | null> => {
-    const { createServerSupabaseAdminClient } = await import("@/lib/supabase/server");
+  async (slug: string): Promise<PublicProductDetails | null> => {
     const adminSupabase = createServerSupabaseAdminClient();
 
     const { data, error } = await adminSupabase
       .from("products")
-      .select(productDetailsSelect)
+      .select(`
+        id,
+        category_id,
+        name,
+        slug,
+        model,
+        short_description,
+        description,
+        seo_description,
+        main_image_url,
+        status,
+        is_active,
+        brand:brands(name),
+        category:categories(id, name, slug),
+        product_images(id, image_url, alt, sort_order, created_at)
+      `)
       .eq("slug", slug)
       .eq("is_active", true)
+      .in("status", ["active", "unavailable"])
       .order("sort_order", { foreignTable: "product_images", ascending: true })
       .maybeSingle();
 
@@ -488,7 +498,31 @@ export const getProductBySlug = cache(
       throw new Error(`Failed to fetch product by slug "${slug}": ${error.message}`);
     }
 
-    const product = (data as ProductCardData | null) ?? null;
+    const product = data as unknown as {
+      id: string;
+      category_id: string | null;
+      name: string;
+      slug: string;
+      model: string | null;
+      short_description: string | null;
+      description: string | null;
+      seo_description: string | null;
+      main_image_url: string | null;
+      status: ProductCardData["status"];
+      is_active: boolean;
+      brand: { name: string | null } | Array<{ name: string | null }> | null;
+      category:
+        | { id: string; name: string; slug: string }
+        | Array<{ id: string; name: string; slug: string }>
+        | null;
+      product_images: Array<{
+        id: string;
+        image_url: string;
+        alt: string | null;
+        sort_order: number;
+        created_at: string;
+      }>;
+    } | null;
 
     if (!product) {
       return null;
@@ -500,8 +534,9 @@ export const getProductBySlug = cache(
 
     const { data: variants, error: variantsError } = await adminSupabase
       .from("product_variants")
-      .select("*")
+      .select("id, sku, size, color, retail_price, old_price, stock_quantity, is_active")
       .eq("product_id", product.id)
+      .eq("is_active", true)
       .order("created_at", { ascending: true });
 
     if (variantsError) {
@@ -510,27 +545,32 @@ export const getProductBySlug = cache(
       );
     }
 
-    const allVariants = (variants ?? []) as ProductCardData["product_variants"];
-    const activeVariantsCount = allVariants.filter((variant) => variant.is_active).length;
-    const inactiveVariantsCount = allVariants.length - activeVariantsCount;
+    const brand = Array.isArray(product.brand) ? product.brand[0] ?? null : product.brand;
+    const category = Array.isArray(product.category)
+      ? product.category[0] ?? null
+      : product.category;
 
-    console.log("[getProductBySlug] product details variants", {
-      slug,
-      totalVariants: allVariants.length,
-      activeVariantsCount,
-      inactiveVariantsCount,
-      variants: allVariants.map((variant) => ({
-        id: variant.id,
-        size: variant.size,
-        color: variant.color,
-        is_active: variant.is_active,
-        stock_quantity: variant.stock_quantity,
+    return {
+      id: product.id,
+      category_id: product.category_id,
+      name: product.name,
+      slug: product.slug,
+      model: product.model,
+      short_description: product.short_description,
+      description: product.description,
+      seo_description: product.seo_description,
+      main_image_url: product.main_image_url,
+      status: product.status,
+      brand: brand?.name ? { name: brand.name } : null,
+      category,
+      product_images: sortProductImages(product.product_images ?? []).map((image) => ({
+        id: image.id,
+        image_url: image.image_url,
+        alt: image.alt,
       })),
-    });
-
-    return normalizeProductDetailsRow({
-      ...product,
-      product_variants: allVariants,
-    } as ProductCardData);
+      product_variants: toPublicProductVariants(
+        sortProductVariants((variants ?? []) as PublicProductVariantSource[])
+      ),
+    };
   }
 );

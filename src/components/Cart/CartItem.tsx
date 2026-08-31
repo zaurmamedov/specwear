@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { useCartStore } from "@/stores/cart.store";
 import type { CartItem as CartItemType } from "@/types/store";
 
@@ -25,7 +26,7 @@ export function CartItem({ item, warningMessage = null }: CartItemProps) {
   const maxQuantity =
     typeof item.stockQuantity === "number" && item.stockQuantity > 0
       ? item.stockQuantity
-      : item.quantity;
+      : CHECKOUT_CART_MAX_LINE_QUANTITY;
   const canIncrease = !warningMessage && item.quantity < maxQuantity;
 
   return (

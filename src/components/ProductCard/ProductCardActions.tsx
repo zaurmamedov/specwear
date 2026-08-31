@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
 
@@ -17,7 +18,6 @@ type ProductCardActionsProps = {
   sku: string | null;
   retailPrice: number | null;
   oldPrice: number | null;
-  stockQuantity: number | null;
   categoryName: string | null;
   brandName: string | null;
   canAddToCart: boolean;
@@ -36,7 +36,6 @@ export function ProductCardActions({
   sku,
   retailPrice,
   oldPrice,
-  stockQuantity,
   categoryName,
   brandName,
   canAddToCart,
@@ -65,10 +64,7 @@ export function ProductCardActions({
         (item.variantId ?? null) === (variantId ?? null)
     ) ?? null;
   const isInCart = cartItem !== null;
-  const maxQuantity =
-    typeof stockQuantity === "number" && stockQuantity > 0
-      ? stockQuantity
-      : Math.max(1, cartItem?.quantity ?? pendingQuantity);
+  const maxQuantity = CHECKOUT_CART_MAX_LINE_QUANTITY;
   const currentQuantity = Math.min(cartItem?.quantity ?? pendingQuantity, maxQuantity);
   const canDirectAddToCart = hasSinglePurchasableVariant;
   const shouldRouteToDetails = hasMultipleVariants && hasPurchasableVariant;
@@ -87,7 +83,7 @@ export function ProductCardActions({
     color: null,
     categoryName,
     brandName,
-    stockQuantity,
+    stockQuantity: null,
   };
 
   return (

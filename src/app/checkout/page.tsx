@@ -34,7 +34,6 @@ export default async function CheckoutPage() {
                 lastName: profile?.last_name ?? "",
                 phone: profile?.phone ?? "+380",
                 email: profile?.email ?? user.email ?? "",
-                customerType: profile?.customer_type ?? "retail",
                 deliveryService:
                   (profile?.delivery_service as "nova_poshta" | "ukrposhta" | "pickup" | null) ??
                   "nova_poshta",

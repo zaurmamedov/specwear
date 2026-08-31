@@ -168,13 +168,12 @@ export async function POST(request: Request) {
 
     const session = data.session ?? null;
 
-      const profilePayload = {
-        id: data.user.id,
+    const profilePayload = {
+      id: data.user.id,
       email: data.user.email ?? normalizedEmail,
       first_name: firstName,
       last_name: lastName,
       phone,
-      customer_type: "retail" as const,
     };
 
     if (session?.access_token) {
@@ -188,7 +187,6 @@ export async function POST(request: Request) {
             first_name: firstName,
             last_name: lastName,
             phone,
-            customer_type: "retail",
           },
           session.access_token
         );

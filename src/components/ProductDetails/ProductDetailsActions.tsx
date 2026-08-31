@@ -6,9 +6,10 @@ import {
   isProductPurchasableStatus,
   type ProductStatus,
 } from "@/lib/product-status";
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
-import type { ProductVariant } from "@/types/product";
+import type { PublicProductVariant } from "@/types/product";
 
 import styles from "./ProductDetails.module.css";
 
@@ -20,7 +21,7 @@ type ProductDetailsActionsProps = {
   categoryName: string | null;
   brandName: string | null;
   productStatus: ProductStatus;
-  variants: ProductVariant[];
+  variants: PublicProductVariant[];
 };
 
 function formatPrice(price: number) {
@@ -57,19 +58,13 @@ export function ProductDetailsActions({
   const visibleVariants = useMemo(() => [...variants], [variants]);
   const isPurchasableProduct = isProductPurchasableStatus(productStatus);
 
-  const activeVariants = useMemo(
-    () => variants.filter((variant) => variant.is_active),
-    [variants]
-  );
-
   const selectableVariants = useMemo(
     () =>
       visibleVariants.filter(
         (variant) =>
           isPurchasableProduct &&
-          variant.is_active &&
           variant.retail_price !== null &&
-          variant.stock_quantity > 0
+          variant.is_available
       ),
     [isPurchasableProduct, visibleVariants]
   );
@@ -162,7 +157,7 @@ export function ProductDetailsActions({
   }, [colors, resolvedSize, selectableVariants, selectedColor]);
 
   const selectedVariant = useMemo(() => {
-    const matchesVariant = (variant: ProductVariant) => {
+    const matchesVariant = (variant: PublicProductVariant) => {
       const matchesSize = resolvedSize ? variant.size?.trim() === resolvedSize : true;
       const matchesColor = resolvedColor ? variant.color?.trim() === resolvedColor : true;
       return matchesSize && matchesColor;
@@ -203,16 +198,12 @@ export function ProductDetailsActions({
   const isSelectedVariantSelectable =
     isPurchasableProduct &&
     selectedVariant !== null &&
-    selectedVariant.is_active &&
     selectedVariant.retail_price !== null &&
-    selectedVariant.stock_quantity > 0;
-  const maxQuantity = selectedVariant?.stock_quantity ?? 0;
-  const currentQuantity =
-    selectedVariant?.stock_quantity && selectedVariant.stock_quantity > 0
-      ? Math.min(Math.max(quantity, 1), selectedVariant.stock_quantity)
-      : 1;
+    selectedVariant.is_available;
+  const maxQuantity = CHECKOUT_CART_MAX_LINE_QUANTITY;
+  const currentQuantity = Math.min(Math.max(quantity, 1), maxQuantity);
   const hasVisibleVariants = visibleVariants.length > 0;
-  const hasActiveVariants = activeVariants.length > 0;
+  const hasActiveVariants = visibleVariants.length > 0;
   const hasAnyInStock = selectableVariants.length > 0;
   const needsSizeSelection = sizes.length > 0 && !selectedVariant;
   const needsColorSelection = colors.length > 0 && !selectedVariant;
@@ -262,7 +253,7 @@ export function ProductDetailsActions({
     color: selectedVariant?.color ?? null,
     categoryName,
     brandName,
-    stockQuantity: selectedVariant?.stock_quantity ?? null,
+    stockQuantity: null,
   };
   const effectiveQuantity = cartItem?.quantity ?? currentQuantity;
 

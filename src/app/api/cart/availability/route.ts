@@ -17,8 +17,16 @@ export async function POST(request: Request) {
     const items = parseCheckoutCartItems(body.items);
     const validation = await validateCartItems(items);
 
+    const publicValidation = validation.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      isAvailable: item.isAvailable,
+      status: item.status,
+      message: item.message,
+    }));
+
     return NextResponse.json({
-      items: validation,
+      items: publicValidation,
       hasUnavailableItems: validation.some((item) => !item.isAvailable),
     });
   } catch (error) {
