@@ -1108,7 +1108,7 @@ export function CheckoutClient({
                 checked={form.deliveryService === "pickup"}
                 onChange={handleServiceChange}
               />
-              <span>Самовивіз</span>
+              <span>Самовивіз (м. Кривий Ріг)</span>
             </label>
           </div>
 

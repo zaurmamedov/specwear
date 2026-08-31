@@ -231,18 +231,6 @@ export function AccountSettingsForm({
             </div>
 
             <div className={styles.field}>
-              <label htmlFor="settings-city-ref">City Ref</label>
-              <input
-                id="settings-city-ref"
-                className={styles.input}
-                value={form.deliveryCityRef}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, deliveryCityRef: event.target.value }))
-                }
-              />
-            </div>
-
-            <div className={styles.field}>
               <label htmlFor="settings-warehouse">Відділення / поштомат</label>
               <input
                 id="settings-warehouse"
@@ -250,18 +238,6 @@ export function AccountSettingsForm({
                 value={form.deliveryWarehouse}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, deliveryWarehouse: event.target.value }))
-                }
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="settings-warehouse-ref">Warehouse Ref</label>
-              <input
-                id="settings-warehouse-ref"
-                className={styles.input}
-                value={form.deliveryWarehouseRef}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, deliveryWarehouseRef: event.target.value }))
                 }
               />
             </div>
