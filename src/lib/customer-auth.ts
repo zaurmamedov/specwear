@@ -16,6 +16,7 @@ export {
   CUSTOMER_ACCESS_TOKEN_COOKIE,
   CUSTOMER_REFRESH_TOKEN_COOKIE,
   hasCustomerSessionCookie,
+  resolveCheckoutCustomerSession,
 } from "./customer-session-cookies";
 
 type CookieReader = CustomerCookieReader;

@@ -9,6 +9,8 @@ import {
 import { calculateAuthoritativeCheckoutPricing } from "./checkout-pricing.ts";
 import {
   CHECKOUT_BODY_MAX_BYTES,
+  CHECKOUT_CART_MAX_LINE_QUANTITY,
+  CHECKOUT_CART_MAX_TOTAL_QUANTITY,
   CHECKOUT_COMMENT_MAX_LENGTH,
   CHECKOUT_TURNSTILE_TOKEN_MAX_LENGTH,
 } from "./checkout-validation.shared.ts";
@@ -394,7 +396,14 @@ function createCartLines(count: number, quantity = 1) {
   }));
 }
 
-test("cart accepts 50 lines and rejects line, quantity, and aggregate limits", () => {
+function createCartWithQuantities(quantities: number[]) {
+  return createCartLines(quantities.length).map((item, index) => ({
+    ...item,
+    quantity: quantities[index],
+  }));
+}
+
+test("cart keeps a 1000 per-line cap and allows up to 5000 total units", () => {
   assert.equal(
     validateCheckoutInput(createPayload({ items: createCartLines(50) })).items
       .length,
@@ -407,14 +416,16 @@ test("cart accepts 50 lines and rejects line, quantity, and aggregate limits", (
   expectValidationError(
     () =>
       validateCheckoutInput(
-        createPayload({ items: createCartLines(1, 101) })
+        createPayload({ items: createCartLines(1, 1_001) })
       ),
     "CHECKOUT_CART_LIMIT_EXCEEDED"
   );
   expectValidationError(
     () =>
       validateCheckoutInput(
-        createPayload({ items: createCartLines(3, 67) })
+        createPayload({
+          items: createCartWithQuantities([1_000, 1_000, 1_000, 1_000, 1_000, 1]),
+        })
       ),
     "CHECKOUT_CART_LIMIT_EXCEEDED"
   );
@@ -425,6 +436,27 @@ test("cart accepts 50 lines and rejects line, quantity, and aggregate limits", (
       ),
     "CHECKOUT_CART_LIMIT_EXCEEDED"
   );
+
+  const maximumLine = validateCheckoutInput(
+    createPayload({ items: createCartLines(1, 1_000) })
+  );
+  assert.equal(maximumLine.items[0].quantity, CHECKOUT_CART_MAX_LINE_QUANTITY);
+  assert.equal(CHECKOUT_CART_MAX_TOTAL_QUANTITY, 5_000);
+
+  for (const quantities of [
+    [1_000],
+    [1_000, 1],
+    [1_000, 1_000],
+    [1_000, 1_000, 1_000, 1_000, 999],
+    [1_000, 1_000, 1_000, 1_000, 1_000],
+    [800, 500, 300, 40],
+  ]) {
+    assert.doesNotThrow(() =>
+      validateCheckoutInput(
+        createPayload({ items: createCartWithQuantities(quantities) })
+      )
+    );
+  }
 });
 
 test("cart merges duplicates and canonicalizes UUID case before fingerprinting", () => {
@@ -443,14 +475,10 @@ test("cart merges duplicates and canonicalizes UUID case before fingerprinting",
 });
 
 test("resolved explicit and implicit variant lines cannot bypass the per-line cap", () => {
-  const normalized = validateCheckoutInput(
-    createPayload({
-      items: [
-        { productId: PRODUCT_ID, variantId: null, quantity: 60 },
-        { productId: PRODUCT_ID, variantId: VARIANT_ID, quantity: 60 },
-      ],
-    })
-  );
+  const normalizedItems = [
+    { productId: PRODUCT_ID, variantId: null, quantity: 600 },
+    { productId: PRODUCT_ID, variantId: VARIANT_ID, quantity: 600 },
+  ];
 
   assert.throws(
     () => {
@@ -475,14 +503,14 @@ test("resolved explicit and implicit variant lines cannot bypass the per-line ca
             old_price: null,
             wholesale_price: null,
             min_wholesale_quantity: null,
-            stock_quantity: 200,
+            stock_quantity: 2_000,
             is_active: true,
           },
         ],
       };
 
       return calculateAuthoritativeCheckoutPricing({
-        items: normalized.items,
+        items: normalizedItems,
         products: [product],
         requestedVariants: product.product_variants,
         pricingContext: { customerType: "retail", isWholesaleApproved: false },
@@ -504,7 +532,7 @@ test("oversized Turnstile tokens are rejected before provider verification", () 
   );
 });
 
-test("session policy preserves guests and rejects an invalid attempted login", () => {
+test("strict session guard remains available for authentication-required flows", () => {
   assert.doesNotThrow(() => assertValidCheckoutSessionAttempt(false, false));
   assert.doesNotThrow(() => assertValidCheckoutSessionAttempt(true, true));
   expectValidationError(

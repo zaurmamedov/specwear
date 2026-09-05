@@ -5,6 +5,26 @@ export type CustomerCookieReader = {
   get(name: string): { value: string } | undefined;
 };
 
+type CheckoutCustomerSessionInput = {
+  hasSessionCookie: boolean;
+  accessToken: string | null;
+  verifiedUserId: string | null;
+};
+
+export type CheckoutCustomerSession =
+  | {
+      status: "guest";
+      userId: null;
+      accessToken: null;
+      shouldClearSessionCookies: boolean;
+    }
+  | {
+      status: "authenticated";
+      userId: string;
+      accessToken: string;
+      shouldClearSessionCookies: false;
+    };
+
 type CustomerCookieWriter = {
   cookies: {
     set(
@@ -50,4 +70,26 @@ export function hasCustomerSessionCookie(cookieStore: CustomerCookieReader) {
   const refreshToken = cookieStore.get(CUSTOMER_REFRESH_TOKEN_COOKIE)?.value;
 
   return Boolean(accessToken?.trim() || refreshToken?.trim());
+}
+
+export function resolveCheckoutCustomerSession({
+  hasSessionCookie,
+  accessToken,
+  verifiedUserId,
+}: CheckoutCustomerSessionInput): CheckoutCustomerSession {
+  if (accessToken && verifiedUserId) {
+    return {
+      status: "authenticated",
+      userId: verifiedUserId,
+      accessToken,
+      shouldClearSessionCookies: false,
+    };
+  }
+
+  return {
+    status: "guest",
+    userId: null,
+    accessToken: null,
+    shouldClearSessionCookies: hasSessionCookie,
+  };
 }

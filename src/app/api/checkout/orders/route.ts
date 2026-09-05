@@ -2,9 +2,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import {
+  clearCustomerSessionCookies,
   getCustomerAccessTokenFromCookieStore,
   getCustomerUserFromCookieStore,
   hasCustomerSessionCookie,
+  resolveCheckoutCustomerSession,
 } from "@/lib/customer-auth";
 import {
   createCheckoutRequestFingerprint,
@@ -19,7 +21,6 @@ import {
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
 import { sendOrderTelegramNotification } from "@/lib/telegram";
 import {
-  assertValidCheckoutSessionAttempt,
   CheckoutValidationError,
   readCheckoutJsonRequest,
   validateCheckoutInput,
@@ -49,6 +50,18 @@ class CheckoutTurnstileError extends Error {
 }
 
 export async function POST(request: Request) {
+  let shouldClearInvalidCustomerSession = false;
+  const checkoutJson = (body: unknown, init?: ResponseInit) => {
+    const response = NextResponse.json(body, init);
+
+    if (shouldClearInvalidCustomerSession) {
+      clearCustomerSessionCookies(response);
+      response.headers.set("Cache-Control", "no-store");
+    }
+
+    return response;
+  };
+
   try {
     const parsedBody = await readCheckoutJsonRequest(request);
     const input = validateCheckoutInput(parsedBody);
@@ -72,17 +85,30 @@ export async function POST(request: Request) {
       turnstileToken,
     } = input;
     const cookieStore = await cookies();
-    const customerAccessToken =
+    const unverifiedCustomerAccessToken =
       getCustomerAccessTokenFromCookieStore(cookieStore);
-    const customerUser = await getCustomerUserFromCookieStore(cookieStore);
+    let verifiedCustomerUser: Awaited<
+      ReturnType<typeof getCustomerUserFromCookieStore>
+    > = null;
+
+    try {
+      verifiedCustomerUser = await getCustomerUserFromCookieStore(cookieStore);
+    } catch (authError) {
+      console.error("Customer session verification failed during checkout:", authError);
+    }
+
     const hasAttemptedCustomerSession = hasCustomerSessionCookie(cookieStore);
-
-    assertValidCheckoutSessionAttempt(
-      hasAttemptedCustomerSession,
-      Boolean(customerUser)
-    );
-
-    const userId = customerUser?.id ?? null;
+    const customerSession = resolveCheckoutCustomerSession({
+      hasSessionCookie: hasAttemptedCustomerSession,
+      accessToken: unverifiedCustomerAccessToken,
+      verifiedUserId: verifiedCustomerUser?.id ?? null,
+    });
+    shouldClearInvalidCustomerSession =
+      customerSession.shouldClearSessionCookies;
+    const customerUser =
+      customerSession.status === "authenticated" ? verifiedCustomerUser : null;
+    const customerAccessToken = customerSession.accessToken;
+    const userId = customerSession.userId;
     const contact: CheckoutOrderContactData = {
       firstName,
       lastName,
@@ -213,7 +239,7 @@ export async function POST(request: Request) {
     });
 
     if (result.outcome === "conflict") {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: "CHECKOUT_IDEMPOTENCY_CONFLICT",
@@ -225,7 +251,7 @@ export async function POST(request: Request) {
     }
 
     if (result.outcome === "insufficient_stock") {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: "CHECKOUT_INSUFFICIENT_STOCK",
@@ -239,13 +265,13 @@ export async function POST(request: Request) {
       throw new CheckoutOrderPersistenceError();
     }
 
-    return NextResponse.json({
+    return checkoutJson({
       ...result.response,
       reused: result.outcome === "reused",
     });
   } catch (error) {
     if (error instanceof CheckoutValidationError) {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: error.code,
@@ -256,7 +282,7 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CheckoutIdempotencyKeyError) {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: error.code,
@@ -267,14 +293,14 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CheckoutTurnstileError) {
-      return NextResponse.json(
+      return checkoutJson(
         { success: false, code: error.code, error: error.message },
         { status: 400 }
       );
     }
 
     if (error instanceof CheckoutPricingError) {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: error.code,
@@ -285,7 +311,7 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CheckoutProfileLookupError) {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: error.code,
@@ -296,7 +322,7 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CheckoutOrderPersistenceError) {
-      return NextResponse.json(
+      return checkoutJson(
         {
           success: false,
           code: error.code,
@@ -308,7 +334,7 @@ export async function POST(request: Request) {
 
     console.error("Checkout order creation failed:", error);
 
-    return NextResponse.json(
+    return checkoutJson(
       {
         success: false,
         code: "CHECKOUT_ORDER_FAILED",
