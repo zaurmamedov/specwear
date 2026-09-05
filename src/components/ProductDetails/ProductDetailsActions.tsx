@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 
+import { useQuantityInput } from "@/hooks/use-quantity-input";
+import {
+  commitValidatedCartQuantity,
+  getCartItemKey,
+} from "@/lib/cart-quantity";
 import {
   isProductPurchasableStatus,
   type ProductStatus,
@@ -50,8 +55,12 @@ export function ProductDetailsActions({
   variants,
 }: ProductDetailsActionsProps) {
   const cartItems = useCartStore((state) => state.items);
-  const toggleCartItem = useCartStore((state) => state.toggleItem);
+  const addCartItem = useCartStore((state) => state.addItem);
+  const removeCartItem = useCartStore((state) => state.removeItem);
   const setCartQuantity = useCartStore((state) => state.setQuantity);
+  const clearQuantityMessage = useCartStore(
+    (state) => state.clearQuantityMessage
+  );
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const wishlistItems = useWishlistStore((state) => state.items);
 
@@ -237,6 +246,11 @@ export function ProductDetailsActions({
         (item.variantId ?? null) === (selectedVariant?.id ?? null)
     ) ?? null;
   const isInCart = cartItem !== null;
+  const mutationKey = getCartItemKey(productId, selectedVariant?.id ?? null);
+  const quantityFeedbackId = `quantity-feedback-${mutationKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const quantityMutation = useCartStore(
+    (state) => state.quantityMutations[mutationKey]
+  );
 
   const selectedSku = selectedVariant?.sku?.trim() || null;
 
@@ -253,9 +267,32 @@ export function ProductDetailsActions({
     color: selectedVariant?.color ?? null,
     categoryName,
     brandName,
-    stockQuantity: null,
   };
   const effectiveQuantity = cartItem?.quantity ?? currentQuantity;
+  const quantityInput = useQuantityInput({
+    quantity: effectiveQuantity,
+    isPending: quantityMutation?.isPending,
+    message: quantityMutation?.message,
+    onClearMessage: () =>
+      clearQuantityMessage(productId, selectedVariant?.id ?? null),
+    onCommit: async (desiredQuantity) => {
+      if (!selectedVariant) {
+        return { ok: false, message: "Оберіть варіант товару." };
+      }
+
+      if (cartItem) {
+        return setCartQuantity(productId, desiredQuantity, selectedVariant.id);
+      }
+
+      return commitValidatedCartQuantity({
+        productId,
+        variantId: selectedVariant.id,
+        previousQuantity: currentQuantity,
+        desiredQuantity,
+        commit: setQuantity,
+      });
+    },
+  });
 
   return (
     <section className={styles.actionsPanel}>
@@ -298,13 +335,14 @@ export function ProductDetailsActions({
                       key={size}
                       type="button"
                       className={`${styles.sizeButton} ${isSelected ? styles.sizeButtonActive : ""}`}
-                      disabled={!isAvailable}
+                      disabled={!isAvailable || quantityInput.pending}
                       onClick={() => {
                         if (!isAvailable) {
                           return;
                         }
                         setSelectedSize(size);
                         setQuantity(1);
+                        quantityInput.reset();
                       }}
                     >
                       <span>{size}</span>
@@ -333,13 +371,14 @@ export function ProductDetailsActions({
                       key={color}
                       type="button"
                       className={`${styles.colorButton} ${isSelected ? styles.colorButtonActive : ""}`}
-                      disabled={!isAvailable}
+                      disabled={!isAvailable || quantityInput.pending}
                       onClick={() => {
                         if (!isAvailable) {
                           return;
                         }
                         setSelectedColor(color);
                         setQuantity(1);
+                        quantityInput.reset();
                       }}
                     >
                       <span
@@ -369,41 +408,54 @@ export function ProductDetailsActions({
             className={styles.quantityButton}
             aria-label="Зменшити кількість"
             onClick={() => {
-              if (isInCart && selectedVariant) {
-                setCartQuantity(
-                  productId,
-                  Math.max(1, effectiveQuantity - 1),
-                  selectedVariant.id
-                );
-                return;
-              }
-
-              setQuantity((current) => Math.max(1, current - 1));
+              void quantityInput.commitQuantity(
+                Math.max(1, effectiveQuantity - 1)
+              );
             }}
-            disabled={!canAddToCart || effectiveQuantity <= 1}
+            disabled={
+              !canAddToCart || quantityInput.pending || effectiveQuantity <= 1
+            }
           >
             -
           </button>
-          <span className={styles.quantityValue}>{effectiveQuantity}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            maxLength={16}
+            className={styles.quantityInput}
+            aria-label="Кількість товару"
+            aria-describedby={quantityInput.message ? quantityFeedbackId : undefined}
+            aria-invalid={Boolean(quantityInput.message)}
+            value={quantityInput.draft}
+            disabled={!canAddToCart || quantityInput.pending}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => quantityInput.setDraft(event.target.value)}
+            onBlur={() => void quantityInput.commitDraft()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              } else if (event.key === "Escape") {
+                quantityInput.restore();
+                event.currentTarget.blur();
+              }
+            }}
+          />
           <button
             type="button"
             className={styles.quantityButton}
             aria-label="Збільшити кількість"
             onClick={() => {
-              if (isInCart && selectedVariant) {
-                setCartQuantity(
-                  productId,
-                  Math.min(Math.max(maxQuantity, 1), effectiveQuantity + 1),
-                  selectedVariant.id
-                );
-                return;
-              }
-
-              setQuantity((current) =>
-                Math.min(Math.max(maxQuantity, 1), current + 1)
+              void quantityInput.commitQuantity(
+                Math.min(maxQuantity, effectiveQuantity + 1)
               );
             }}
-            disabled={!canAddToCart || effectiveQuantity >= maxQuantity}
+            disabled={
+              !canAddToCart ||
+              quantityInput.pending ||
+              effectiveQuantity >= maxQuantity
+            }
           >
             +
           </button>
@@ -415,13 +467,18 @@ export function ProductDetailsActions({
             className={`${styles.actionButton} ${styles.cartButton} ${isInCart ? styles.cartButtonActive : ""}`}
             aria-label={isInCart ? "Прибрати з кошика" : "Додати до кошика"}
             aria-pressed={isInCart}
-            disabled={!canAddToCart}
+            disabled={!canAddToCart || quantityInput.pending}
             onClick={() => {
               if (!canAddToCart) {
                 return;
               }
 
-              toggleCartItem({
+              if (isInCart) {
+                removeCartItem(productId, selectedVariant?.id ?? null);
+                return;
+              }
+
+              void addCartItem({
                 ...storeItem,
                 quantity: effectiveQuantity,
               });
@@ -463,6 +520,17 @@ export function ProductDetailsActions({
           </button>
         </div>
       </div>
+
+      {quantityInput.message ? (
+        <p
+          id={quantityFeedbackId}
+          className={styles.quantityFeedback}
+          role="status"
+          aria-live="polite"
+        >
+          {quantityInput.message}
+        </p>
+      ) : null}
     </section>
   );
 }

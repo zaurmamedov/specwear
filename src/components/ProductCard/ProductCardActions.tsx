@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useQuantityInput } from "@/hooks/use-quantity-input";
+import {
+  commitValidatedCartQuantity,
+  getCartItemKey,
+} from "@/lib/cart-quantity";
 import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { useCartStore } from "@/stores/cart.store";
 import { useWishlistStore } from "@/stores/wishlist.store";
@@ -46,8 +51,12 @@ export function ProductCardActions({
 }: ProductCardActionsProps) {
   const router = useRouter();
   const cartItems = useCartStore((state) => state.items);
-  const toggleCartItem = useCartStore((state) => state.toggleItem);
+  const addCartItem = useCartStore((state) => state.addItem);
+  const removeCartItem = useCartStore((state) => state.removeItem);
   const setQuantity = useCartStore((state) => state.setQuantity);
+  const clearQuantityMessage = useCartStore(
+    (state) => state.clearQuantityMessage
+  );
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const wishlistItems = useWishlistStore((state) => state.items);
   const [pendingQuantity, setPendingQuantity] = useState(1);
@@ -64,11 +73,36 @@ export function ProductCardActions({
         (item.variantId ?? null) === (variantId ?? null)
     ) ?? null;
   const isInCart = cartItem !== null;
+  const mutationKey = getCartItemKey(productId, variantId);
+  const quantityFeedbackId = `quantity-feedback-${mutationKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const quantityMutation = useCartStore(
+    (state) => state.quantityMutations[mutationKey]
+  );
   const maxQuantity = CHECKOUT_CART_MAX_LINE_QUANTITY;
   const currentQuantity = Math.min(cartItem?.quantity ?? pendingQuantity, maxQuantity);
   const canDirectAddToCart = hasSinglePurchasableVariant;
   const shouldRouteToDetails = hasMultipleVariants && hasPurchasableVariant;
   const isUnavailable = !hasActiveVariants || (!shouldRouteToDetails && !canAddToCart);
+
+  const quantityInput = useQuantityInput({
+    quantity: currentQuantity,
+    isPending: quantityMutation?.isPending,
+    message: quantityMutation?.message,
+    onClearMessage: () => clearQuantityMessage(productId, variantId),
+    onCommit: async (desiredQuantity) => {
+      if (cartItem) {
+        return setQuantity(productId, desiredQuantity, variantId);
+      }
+
+      return commitValidatedCartQuantity({
+        productId,
+        variantId,
+        previousQuantity: currentQuantity,
+        desiredQuantity,
+        commit: setPendingQuantity,
+      });
+    },
+  });
 
   const storeItem = {
     productId,
@@ -83,7 +117,6 @@ export function ProductCardActions({
     color: null,
     categoryName,
     brandName,
-    stockQuantity: null,
   };
 
   return (
@@ -95,38 +128,46 @@ export function ProductCardActions({
             className={styles.quantityButton}
             aria-label="Зменшити кількість"
             onClick={() => {
-              if (isInCart && cartItem) {
-                setQuantity(
-                  productId,
-                  Math.max(1, cartItem.quantity - 1),
-                  variantId
-                );
-                return;
-              }
-
-              setPendingQuantity((current) => Math.max(1, current - 1));
+              void quantityInput.commitQuantity(Math.max(1, currentQuantity - 1));
             }}
+            disabled={quantityInput.pending || currentQuantity <= 1}
           >
             -
           </button>
-          <span className={styles.quantityValue}>{currentQuantity}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            maxLength={16}
+            className={styles.quantityInput}
+            aria-label="Кількість товару"
+            aria-describedby={quantityInput.message ? quantityFeedbackId : undefined}
+            aria-invalid={Boolean(quantityInput.message)}
+            value={quantityInput.draft}
+            disabled={quantityInput.pending}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => quantityInput.setDraft(event.target.value)}
+            onBlur={() => void quantityInput.commitDraft()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              } else if (event.key === "Escape") {
+                quantityInput.restore();
+                event.currentTarget.blur();
+              }
+            }}
+          />
           <button
             type="button"
             className={styles.quantityButton}
             aria-label="Збільшити кількість"
             onClick={() => {
-              if (isInCart && cartItem) {
-                setQuantity(
-                  productId,
-                  Math.min(maxQuantity, cartItem.quantity + 1),
-                  variantId
-                );
-                return;
-              }
-
-              setPendingQuantity((current) => Math.min(maxQuantity, current + 1));
+              void quantityInput.commitQuantity(
+                Math.min(maxQuantity, currentQuantity + 1)
+              );
             }}
-            disabled={currentQuantity >= maxQuantity}
+            disabled={quantityInput.pending || currentQuantity >= maxQuantity}
           >
             +
           </button>
@@ -144,7 +185,7 @@ export function ProductCardActions({
               : "Додати до кошика"
         }
         aria-pressed={isInCart}
-        disabled={isUnavailable}
+        disabled={isUnavailable || quantityInput.pending}
         title={hasMultipleVariants ? "Оберіть розмір та колір" : undefined}
         onClick={() => {
           if (isUnavailable) {
@@ -156,7 +197,12 @@ export function ProductCardActions({
             return;
           }
 
-          toggleCartItem({
+          if (isInCart) {
+            removeCartItem(productId, variantId);
+            return;
+          }
+
+          void addCartItem({
             ...storeItem,
             quantity: currentQuantity,
           });
@@ -194,6 +240,17 @@ export function ProductCardActions({
           />
         </svg>
       </button>
+
+      {quantityInput.message ? (
+        <p
+          id={quantityFeedbackId}
+          className={styles.quantityFeedback}
+          role="status"
+          aria-live="polite"
+        >
+          {quantityInput.message}
+        </p>
+      ) : null}
     </div>
   );
 }

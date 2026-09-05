@@ -6,6 +6,7 @@ import {
   createServerSupabaseCustomerDataClient,
   createServerSupabaseCustomerDataClientFromCookies,
 } from "@/lib/customer-auth";
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { normalizeProductStatus } from "@/lib/product-status";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import type { OrderWithItems } from "@/types/order";
@@ -420,8 +421,11 @@ export async function buildRepeatOrderItems(
       color: matchedVariant.color ?? null,
       categoryName: product.category?.name ?? null,
       brandName: product.brand?.name ?? null,
-      stockQuantity: matchedVariant.stock_quantity,
-      quantity: Math.min(orderItem.quantity, matchedVariant.stock_quantity),
+      quantity: Math.min(
+        orderItem.quantity,
+        matchedVariant.stock_quantity,
+        CHECKOUT_CART_MAX_LINE_QUANTITY
+      ),
     });
   }
 

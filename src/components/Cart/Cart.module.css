@@ -215,6 +215,12 @@
   background: var(--color-surface);
 }
 
+.quantityBlock {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
 .quantityButton {
   width: 2.5rem;
   height: 2.5rem;
@@ -233,10 +239,39 @@
   line-height: 1.5;
 }
 
-.quantityValue {
-  min-width: 2rem;
+.quantityInput {
+  width: 3.5rem;
+  min-width: 0;
+  height: 2.5rem;
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  color: var(--color-dark);
+  background: var(--color-surface);
   text-align: center;
+  font: inherit;
   font-weight: 700;
+}
+
+.quantityInput:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(249, 115, 22, 0.38);
+}
+
+.quantityInput[aria-invalid="true"] {
+  color: #b91c1c;
+}
+
+.quantityInput:disabled {
+  opacity: 0.65;
+}
+
+.quantityFeedback {
+  max-width: 16rem;
+  color: #b91c1c;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .subtotalBlock {

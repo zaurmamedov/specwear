@@ -241,12 +241,15 @@ export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
                       throw new Error(payload.error ?? "Не вдалося повторити замовлення.");
                     }
 
-                    payload.items.forEach((item) => addItem(item));
+                    const addResults = await Promise.all(
+                      payload.items.map((item) => addItem(item))
+                    );
 
                     const unavailableCount = payload.unavailableItems?.length ?? 0;
+                    const rejectedCount = addResults.filter((result) => !result.ok).length;
                     const message =
-                      unavailableCount > 0
-                        ? `Додано доступні позиції. Недоступно: ${unavailableCount}.`
+                      unavailableCount + rejectedCount > 0
+                        ? `Додано доступні позиції. Недоступно: ${unavailableCount + rejectedCount}.`
                         : "Товари додано до кошика.";
 
                     setFeedback((current) => ({

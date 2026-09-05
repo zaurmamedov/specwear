@@ -216,6 +216,31 @@ test("відхиляє кількість, що перевищує актуал�
   );
 });
 
+test("приймає 1000 одиниць за достатнього stock і відхиляє 1001", () => {
+  const stockedVariant = createVariant({ stock_quantity: 1_001 });
+  const product = createProduct({ product_variants: [stockedVariant] });
+  const pricing = priceCart({
+    rawItems: [
+      { productId: PRODUCT_A_ID, variantId: VARIANT_A_ID, quantity: 1_000 },
+    ],
+    product,
+    requestedVariants: [stockedVariant],
+  });
+
+  assert.equal(pricing.items[0].quantity, 1_000);
+  assert.throws(
+    () =>
+      priceCart({
+        rawItems: [
+          { productId: PRODUCT_A_ID, variantId: VARIANT_A_ID, quantity: 1_001 },
+        ],
+        product,
+        requestedVariants: [stockedVariant],
+      }),
+    /Кількість одного товару/
+  );
+});
+
 test("об'єднує дублікати та перевіряє їхню сумарну кількість", () => {
   const pricing = priceCart({
     rawItems: [

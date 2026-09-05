@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { useQuantityInput } from "@/hooks/use-quantity-input";
+import { getCartItemKey } from "@/lib/cart-quantity";
 import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { useCartStore } from "@/stores/cart.store";
 import type { CartItem as CartItemType } from "@/types/store";
@@ -21,13 +23,26 @@ function formatPrice(price: number) {
 export function CartItem({ item, warningMessage = null }: CartItemProps) {
   const removeItem = useCartStore((state) => state.removeItem);
   const setQuantity = useCartStore((state) => state.setQuantity);
+  const clearQuantityMessage = useCartStore((state) => state.clearQuantityMessage);
+  const mutationKey = getCartItemKey(item.productId, item.variantId);
+  const mutation = useCartStore((state) => state.quantityMutations[mutationKey]);
+  const quantityInput = useQuantityInput({
+    quantity: item.quantity,
+    isPending: mutation?.isPending,
+    message: mutation?.message,
+    onCommit: (quantity) =>
+      setQuantity(item.productId, quantity, item.variantId),
+    onClearMessage: () =>
+      clearQuantityMessage(item.productId, item.variantId),
+  });
 
   const itemSubtotal = (item.price ?? 0) * item.quantity;
-  const maxQuantity =
-    typeof item.stockQuantity === "number" && item.stockQuantity > 0
-      ? item.stockQuantity
-      : CHECKOUT_CART_MAX_LINE_QUANTITY;
-  const canIncrease = !warningMessage && item.quantity < maxQuantity;
+  const canIncrease =
+    !warningMessage &&
+    !mutation?.isPending &&
+    item.quantity < CHECKOUT_CART_MAX_LINE_QUANTITY;
+  const quantityFeedback = quantityInput.message;
+  const quantityFeedbackId = `quantity-feedback-${mutationKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
   return (
     <article className={styles.item}>
@@ -98,33 +113,75 @@ export function CartItem({ item, warningMessage = null }: CartItemProps) {
             )}
           </div>
 
-          <div className={styles.quantityControl}>
-            <button
+          <div className={styles.quantityBlock}>
+            <div className={styles.quantityControl}>
+              <button
               type="button"
               className={styles.quantityButton}
               aria-label="Зменшити кількість"
-              onClick={() =>
-                setQuantity(item.productId, Math.max(1, item.quantity - 1), item.variantId)
-              }
+              onClick={() => {
+                void quantityInput.commitQuantity(
+                  Math.max(1, item.quantity - 1)
+                );
+              }}
+              disabled={quantityInput.pending || item.quantity <= 1}
             >
-              -
-            </button>
-            <span className={styles.quantityValue}>{item.quantity}</span>
-            <button
+              −
+              </button>
+              <input
+              type="text"
+              className={styles.quantityInput}
+              aria-label={`Кількість товару «${item.name}»`}
+              aria-describedby={quantityFeedback ? quantityFeedbackId : undefined}
+              aria-invalid={Boolean(quantityFeedback)}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              maxLength={16}
+              value={quantityInput.draft}
+              disabled={quantityInput.pending}
+              onFocus={(event) => {
+                event.currentTarget.select();
+              }}
+              onChange={(event) => {
+                quantityInput.setDraft(event.target.value);
+              }}
+              onBlur={() => void quantityInput.commitDraft()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+
+                if (event.key === "Escape") {
+                  quantityInput.restore();
+                  event.currentTarget.blur();
+                }
+              }}
+              />
+              <button
               type="button"
               className={styles.quantityButton}
               aria-label="Збільшити кількість"
-              onClick={() =>
-                setQuantity(
-                  item.productId,
-                  Math.min(maxQuantity, item.quantity + 1),
-                  item.variantId
-                )
-              }
+              onClick={() => {
+                void quantityInput.commitQuantity(item.quantity + 1);
+              }}
               disabled={!canIncrease}
             >
               +
-            </button>
+              </button>
+            </div>
+
+            {quantityFeedback ? (
+              <p
+                id={quantityFeedbackId}
+                className={styles.quantityFeedback}
+                role="status"
+                aria-live="polite"
+              >
+                {quantityFeedback}
+              </p>
+            ) : null}
           </div>
 
           <div className={styles.subtotalBlock}>

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "@/lib/checkout-validation.shared";
 import { normalizeProductStatus } from "@/lib/product-status";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -21,6 +22,8 @@ export type CartValidationResultItem = {
 
 const PRODUCT_UNAVAILABLE_MESSAGE = "Товар більше недоступний для замовлення";
 const VARIANT_UNAVAILABLE_MESSAGE = "Цей варіант товару більше недоступний";
+const QUANTITY_LIMIT_MESSAGE =
+  `Кількість одного товару не може перевищувати ${CHECKOUT_CART_MAX_LINE_QUANTITY}.`;
 
 export async function validateCartItems(
   items: CartValidationInputItem[]
@@ -66,6 +69,18 @@ export async function validateCartItems(
   return uniqueItems.map((item) => {
     const product = products.get(item.productId);
     const productStatus = product ? normalizeProductStatus(product.status) : null;
+
+    if (item.quantity > CHECKOUT_CART_MAX_LINE_QUANTITY) {
+      return {
+        productId: item.productId,
+        variantId: item.variantId ?? null,
+        isAvailable: false,
+        status: "unavailable" as const,
+        productStatus,
+        stockQuantity: null,
+        message: QUANTITY_LIMIT_MESSAGE,
+      };
+    }
 
     if (!product || !product.is_active || productStatus === "archived") {
       return {
