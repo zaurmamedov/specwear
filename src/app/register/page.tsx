@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
 import { CustomerRegisterForm } from "@/components/Auth";
+import { getSafeCustomerRedirect } from "@/lib/auth-redirect";
 import { getCustomerUserFromCookieStore } from "@/lib/customer-auth";
 
 import styles from "../admin/login/page.module.css";
@@ -24,7 +25,7 @@ export default async function RegisterPage({
   searchParams,
 }: RegisterPageProps) {
   const params = await searchParams;
-  const redirectTo = getSingleValue(params.redirectTo) || "/account";
+  const redirectTo = getSafeCustomerRedirect(getSingleValue(params.redirectTo));
   const cookieStore = await cookies();
   const user = await getCustomerUserFromCookieStore(cookieStore);
   const developmentWarning =

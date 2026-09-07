@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { getSafeCustomerRedirect } from "@/lib/auth-redirect";
 import {
   TURNSTILE_EXPIRED_MESSAGE,
   TURNSTILE_LOAD_ERROR_MESSAGE,
@@ -24,6 +25,7 @@ export function CustomerLoginForm({
   redirectTo,
 }: CustomerLoginFormProps) {
   const router = useRouter();
+  const safeRedirectTo = getSafeCustomerRedirect(redirectTo);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function CustomerLoginForm({
             throw new Error(payload.error ?? "Не вдалося виконати вхід.");
           }
 
-          router.push(redirectTo || "/account");
+          router.push(safeRedirectTo);
           router.refresh();
         } catch (submitError) {
           setTurnstileToken(null);
@@ -141,7 +143,7 @@ export function CustomerLoginForm({
         </Button>
         <p className={styles.helper}>
           Немає акаунта?{" "}
-          <Link href={`/register${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`}>
+          <Link href={`/register?redirectTo=${encodeURIComponent(safeRedirectTo)}`}>
             Зареєструватися
           </Link>
         </p>

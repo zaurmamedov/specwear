@@ -4,6 +4,7 @@ import type { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getSafeCustomerRedirect } from "./auth-redirect";
 import {
   CUSTOMER_ACCESS_TOKEN_COOKIE,
   CUSTOMER_REFRESH_TOKEN_COOKIE,
@@ -124,7 +125,8 @@ export async function requireCustomerUser(redirectTo = "/account") {
   const user = await getCustomerUserFromCookieStore(cookieStore);
 
   if (!user) {
-    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+    const safeRedirectTo = getSafeCustomerRedirect(redirectTo);
+    redirect(`/login?redirectTo=${encodeURIComponent(safeRedirectTo)}`);
   }
 
   return user as User;

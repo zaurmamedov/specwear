@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { getSafeAdminRedirect } from "@/lib/auth-redirect";
 import {
   TURNSTILE_EXPIRED_MESSAGE,
   TURNSTILE_LOAD_ERROR_MESSAGE,
@@ -23,6 +24,7 @@ export function AdminLoginForm({
   nextPath,
 }: AdminLoginFormProps) {
   const router = useRouter();
+  const safeNextPath = getSafeAdminRedirect(nextPath);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function AdminLoginForm({
         throw new Error(payload?.error ?? "Не вдалося увійти до адмін-панелі.");
       }
 
-      router.replace(nextPath || "/admin/orders");
+      router.replace(safeNextPath);
       router.refresh();
     } catch (caughtError) {
       setTurnstileToken(null);

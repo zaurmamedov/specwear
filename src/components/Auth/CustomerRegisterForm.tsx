@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { getSafeCustomerRedirect } from "@/lib/auth-redirect";
 import {
   TURNSTILE_EXPIRED_MESSAGE,
   TURNSTILE_LOAD_ERROR_MESSAGE,
@@ -32,6 +33,7 @@ export function CustomerRegisterForm({
   redirectTo,
 }: CustomerRegisterFormProps) {
   const router = useRouter();
+  const safeRedirectTo = getSafeCustomerRedirect(redirectTo);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("+380");
@@ -131,7 +133,7 @@ export function CustomerRegisterForm({
             return;
           }
 
-          router.push(redirectTo || "/account");
+          router.push(safeRedirectTo);
           router.refresh();
         } catch (error) {
           setTurnstileToken(null);
@@ -256,7 +258,7 @@ export function CustomerRegisterForm({
           <p className={styles.helper}>
             Після підтвердження email ви зможете{" "}
             <Link
-              href={`/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`}
+              href={`/login?redirectTo=${encodeURIComponent(safeRedirectTo)}`}
             >
               увійти в акаунт
             </Link>
@@ -271,7 +273,7 @@ export function CustomerRegisterForm({
         </Button>
         <p className={styles.helper}>
           Уже є акаунт?{" "}
-          <Link href={`/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`}>
+          <Link href={`/login?redirectTo=${encodeURIComponent(safeRedirectTo)}`}>
             Увійти
           </Link>
         </p>

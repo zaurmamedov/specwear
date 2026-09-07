@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { AdminLoginForm } from "@/components/AdminAuth";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import { getSafeAdminRedirect } from "@/lib/auth-redirect";
 
 import styles from "./page.module.css";
 
@@ -37,7 +38,7 @@ export default async function AdminLoginPage({
   searchParams,
 }: AdminLoginPageProps) {
   const params = await searchParams;
-  const nextPath = getSingleValue(params.next) || "/admin/orders";
+  const nextPath = getSafeAdminRedirect(getSingleValue(params.next));
   const error = getSingleValue(params.error);
   const cookieStore = await cookies();
   const currentUser = await getAdminUserFromCookieStore(cookieStore);
