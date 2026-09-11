@@ -10,18 +10,25 @@ import {
   sanitizePersistedCartItems,
 } from "@/lib/cart-quantity";
 import {
+  getCartAvailabilitySnapshotKey,
+  requestCartAvailability,
+} from "@/lib/cart-availability-client";
+import {
   CHECKOUT_CART_MAX_LINE_QUANTITY,
+  CHECKOUT_CART_MAX_RAW_LINES,
   CHECKOUT_CART_MAX_TOTAL_QUANTITY,
+  CHECKOUT_CART_MAX_UNIQUE_LINES,
 } from "@/lib/checkout-validation.shared";
 import type { CartItem } from "@/types/store";
 
-type AddCartItemInput = Omit<CartItem, "quantity"> & {
+export type AddCartItemInput = Omit<CartItem, "quantity"> & {
   quantity?: number;
 };
 
 export type CartQuantityMutationResult = {
   ok: boolean;
   message: string | null;
+  rejectedCount?: number;
 };
 
 type CartQuantityMutationState = {
@@ -33,6 +40,7 @@ type CartStore = {
   items: CartItem[];
   quantityMutations: Record<string, CartQuantityMutationState>;
   addItem: (item: AddCartItemInput) => Promise<CartQuantityMutationResult>;
+  addItems: (items: AddCartItemInput[]) => Promise<CartQuantityMutationResult>;
   removeItem: (productId: string, variantId?: string | null) => void;
   setQuantity: (
     productId: string,
@@ -82,6 +90,14 @@ function totalQuantityAfterChange(
 
 function totalQuantityAfterAdd(items: CartItem[], quantity: number) {
   return items.reduce((total, item) => total + item.quantity, 0) + quantity;
+}
+
+function availabilityItems(items: CartItem[]) {
+  return items.map((item) => ({
+    productId: item.productId,
+    variantId: item.variantId ?? null,
+    quantity: item.quantity,
+  }));
 }
 
 export const useCartStore = create<CartStore>()(
@@ -147,10 +163,18 @@ export const useCartStore = create<CartStore>()(
           }
 
           setMutationState(key, { isPending: true, message: null });
+          const prospectiveItems = existingItem
+            ? initialState.items.map((cartItem) =>
+                isSameCartItem(cartItem, item.productId, item.variantId)
+                  ? { ...cartItem, ...item, quantity: desiredQuantity }
+                  : cartItem
+              )
+            : [...initialState.items, { ...item, quantity: quantityToAdd }];
           const availability = await requestCartQuantityAvailability({
             productId: item.productId,
             variantId: item.variantId,
             quantity: desiredQuantity,
+            cartItems: availabilityItems(prospectiveItems),
           });
 
           if (!availability.ok) {
@@ -202,6 +226,138 @@ export const useCartStore = create<CartStore>()(
           }));
 
           return { ok: true, message: null };
+        },
+        addItems: async (incomingItems) => {
+          if (
+            incomingItems.length === 0 ||
+            incomingItems.length > CHECKOUT_CART_MAX_RAW_LINES
+          ) {
+            const message = `Можна повторити не більше ${CHECKOUT_CART_MAX_RAW_LINES} позицій за один раз.`;
+            return { ok: false, message, rejectedCount: incomingItems.length };
+          }
+
+          const initialItems = get().items;
+          const initialSnapshot = getCartAvailabilitySnapshotKey(
+            availabilityItems(initialItems)
+          );
+          const candidates = new Map<string, CartItem>();
+
+          for (const existing of initialItems) {
+            candidates.set(
+              getCartItemKey(existing.productId, existing.variantId),
+              existing
+            );
+          }
+
+          const changedKeys = new Set<string>();
+
+          for (const incoming of incomingItems) {
+            const quantityToAdd = incoming.quantity ?? 1;
+            const quantityError = invalidQuantityMessage(quantityToAdd);
+
+            if (quantityError) {
+              return {
+                ok: false,
+                message: quantityError,
+                rejectedCount: incomingItems.length,
+              };
+            }
+
+            const key = getCartItemKey(incoming.productId, incoming.variantId);
+            const existing = candidates.get(key);
+            const quantity = (existing?.quantity ?? 0) + quantityToAdd;
+            const desiredError = invalidQuantityMessage(quantity);
+
+            if (desiredError) {
+              return {
+                ok: false,
+                message: desiredError,
+                rejectedCount: incomingItems.length,
+              };
+            }
+
+            candidates.set(key, { ...existing, ...incoming, quantity } as CartItem);
+            changedKeys.add(key);
+          }
+
+          if (candidates.size > CHECKOUT_CART_MAX_UNIQUE_LINES) {
+            const message = `У кошику може бути не більше ${CHECKOUT_CART_MAX_UNIQUE_LINES} унікальних позицій.`;
+            return { ok: false, message, rejectedCount: incomingItems.length };
+          }
+
+          const candidateItems = [...candidates.values()];
+          const totalQuantity = candidateItems.reduce(
+            (total, item) => total + item.quantity,
+            0
+          );
+
+          if (totalQuantity > CHECKOUT_CART_MAX_TOTAL_QUANTITY) {
+            const message = `Загальна кількість товарів не може перевищувати ${CHECKOUT_CART_MAX_TOTAL_QUANTITY}.`;
+            return { ok: false, message, rejectedCount: incomingItems.length };
+          }
+
+          let validation;
+
+          try {
+            validation = await requestCartAvailability(
+              candidateItems
+                .filter((item) =>
+                  changedKeys.has(getCartItemKey(item.productId, item.variantId))
+                )
+                .map((item) => ({
+                  productId: item.productId,
+                  variantId: item.variantId ?? null,
+                  quantity: item.quantity,
+                }))
+            );
+          } catch {
+            return {
+              ok: false,
+              message: CART_QUANTITY_CHECK_FAILED_MESSAGE,
+              rejectedCount: incomingItems.length,
+            };
+          }
+
+          if (
+            getCartAvailabilitySnapshotKey(availabilityItems(get().items)) !==
+            initialSnapshot
+          ) {
+            return {
+              ok: false,
+              message: CART_QUANTITY_CHECK_FAILED_MESSAGE,
+              rejectedCount: incomingItems.length,
+            };
+          }
+
+          const acceptedKeys = new Set(
+            validation.items
+              .filter((item) => item.isAvailable)
+              .map((item) => getCartItemKey(item.productId, item.variantId))
+          );
+          const rejectedCount = [...changedKeys].filter(
+            (key) => !acceptedKeys.has(key)
+          ).length;
+
+          set((state) => {
+            const nextItems = new Map(
+              state.items.map((item) => [
+                getCartItemKey(item.productId, item.variantId),
+                item,
+              ])
+            );
+
+            for (const key of acceptedKeys) {
+              const candidate = candidates.get(key);
+
+              if (candidate) {
+                nextItems.set(key, candidate);
+              }
+            }
+
+            return { items: [...nextItems.values()] };
+          });
+
+          return { ok: true, message: null, rejectedCount };
         },
         removeItem: (productId, variantId) => {
           const key = getCartItemKey(productId, variantId);
@@ -276,10 +432,16 @@ export const useCartStore = create<CartStore>()(
           }
 
           setMutationState(key, { isPending: true, message: null });
+          const prospectiveItems = initialState.items.map((item) =>
+            isSameCartItem(item, productId, variantId)
+              ? { ...item, quantity }
+              : item
+          );
           const availability = await requestCartQuantityAvailability({
             productId,
             variantId,
             quantity,
+            cartItems: availabilityItems(prospectiveItems),
           });
 
           if (!availability.ok) {

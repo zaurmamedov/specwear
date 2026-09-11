@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { useCartAvailability } from "@/hooks/use-cart-availability";
 import {
   type CheckoutClientFieldErrors,
   type CheckoutClientFieldName,
@@ -24,6 +25,7 @@ import {
   mapCheckoutServerErrorToFields,
 } from "@/lib/checkout-client-validation";
 import { isSupabaseStorageUrl } from "@/lib/images";
+import { isNovaPoshtaWarehouseQueryEligible } from "@/lib/nova-poshta-query.shared";
 import {
   CHECKOUT_ADDRESS_MAX_LENGTH,
   CHECKOUT_CART_MAX_LINE_QUANTITY,
@@ -81,13 +83,6 @@ type NovaPoshtaWarehouse = {
   name: string;
   address: string;
   type: string;
-};
-
-type CartAvailabilityResult = {
-  productId: string;
-  variantId: string | null;
-  isAvailable: boolean;
-  message: string | null;
 };
 
 type PersistedCheckoutAttempt = {
@@ -327,7 +322,7 @@ export function CheckoutClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [cartAvailability, setCartAvailability] = useState<CartAvailabilityResult[]>([]);
+  const cartAvailability = useCartAvailability(items);
   const [touched, setTouched] = useState<CheckoutTouchedState>(UNTOUCHED_FIELDS);
   const [serverFieldErrors, setServerFieldErrors] =
     useState<CheckoutFieldErrors>(EMPTY_FIELD_ERRORS);
@@ -381,49 +376,6 @@ export function CheckoutClient({
     form.deliveryMethod === "locker"
       ? "Введіть номер або адресу поштомату"
       : "Введіть номер або адресу відділення";
-
-  useEffect(() => {
-    if (items.length === 0) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/cart/availability", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            items: items.map((item) => ({
-              productId: item.productId,
-              variantId: item.variantId ?? null,
-              quantity: item.quantity,
-            })),
-          }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as { items?: CartAvailabilityResult[] };
-
-        if (!controller.signal.aborted) {
-          setCartAvailability(Array.isArray(payload.items) ? payload.items : []);
-        }
-      } catch {
-        if (!controller.signal.aborted) {
-          setCartAvailability([]);
-        }
-      }
-    })();
-
-    return () => controller.abort();
-  }, [items]);
 
   useEffect(() => {
     if (!isNovaPoshta) {
@@ -487,11 +439,23 @@ export function CheckoutClient({
       return;
     }
 
+    if (
+      form.deliveryWarehouseRef &&
+      warehouseQuery.trim() === form.deliveryWarehouse.trim()
+    ) {
+      return;
+    }
+
+    const query = warehouseQuery.trim();
+
+    if (!isNovaPoshtaWarehouseQueryEligible(query)) {
+      return;
+    }
+
     const controller = new AbortController();
     const cityRef = form.deliveryCityRef;
     const warehouseType =
       form.deliveryMethod === "locker" ? "parcel_locker" : "branch";
-    const query = warehouseQuery.trim();
 
     const timeoutId = window.setTimeout(() => {
       void (async () => {
@@ -504,7 +468,7 @@ export function CheckoutClient({
             type: warehouseType,
           });
 
-          if (query.length >= 2) {
+          if (query) {
             params.set("q", query);
           }
 
@@ -550,6 +514,8 @@ export function CheckoutClient({
   }, [
     form.deliveryCityRef,
     form.deliveryMethod,
+    form.deliveryWarehouse,
+    form.deliveryWarehouseRef,
     usesNovaPoshtaWarehouses,
     warehouseQuery,
   ]);
@@ -771,6 +737,10 @@ export function CheckoutClient({
     setWarehouseQuery(value);
     setWarehouseSearchError(null);
     setIsWarehouseSuggestionsOpen(Boolean(form.deliveryCityRef));
+
+    if (!isNovaPoshtaWarehouseQueryEligible(value) && value.trim()) {
+      setWarehouseOptions([]);
+    }
 
     setForm((current) => ({
       ...current,

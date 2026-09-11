@@ -25,8 +25,12 @@ const ADMIN_VARIANT_SERVICE = readFileSync(
   new URL("../services/admin-products.service.ts", import.meta.url),
   "utf8"
 );
-const AVAILABILITY_ROUTE = readFileSync(
-  new URL("../app/api/cart/availability/route.ts", import.meta.url),
+const AVAILABILITY_HANDLER = readFileSync(
+  new URL("./cart-availability-handler.ts", import.meta.url),
+  "utf8"
+);
+const PUBLIC_API_VALIDATION = readFileSync(
+  new URL("./public-api-validation.ts", import.meta.url),
   "utf8"
 );
 
@@ -166,5 +170,6 @@ test("admin variant update uses expected stock and availability normalizes dupli
   assert.match(ADMIN_VARIANT_SERVICE, /p_expected_stock_quantity/);
   assert.match(ADMIN_VARIANT_SERVICE, /p_expected_updated_at/);
   assert.match(ADMIN_VARIANT_SERVICE, /data\.outcome === "stock_conflict"/);
-  assert.match(AVAILABILITY_ROUTE, /parseCheckoutCartItems\(body\.items\)/);
+  assert.match(AVAILABILITY_HANDLER, /parseAvailabilityItems\(body\)/);
+  assert.match(PUBLIC_API_VALIDATION, /parseCheckoutCartItems\(rawItems\)/);
 });

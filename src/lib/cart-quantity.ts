@@ -1,4 +1,6 @@
 import { CHECKOUT_CART_MAX_LINE_QUANTITY } from "./checkout-validation.shared.ts";
+import { requestCartAvailability } from "./cart-availability-client.ts";
+import type { CartAvailabilityRequestItem } from "./cart-availability-client.ts";
 import type { CartItem } from "../types/store.ts";
 
 export const CART_QUANTITY_UNAVAILABLE_MESSAGE =
@@ -150,10 +152,39 @@ export async function requestCartQuantityAvailability(
     productId: string;
     variantId?: string | null;
     quantity: number;
+    cartItems?: CartAvailabilityRequestItem[];
   },
   fetcher: typeof fetch = fetch
 ): Promise<CartQuantityAvailabilityResult> {
   try {
+    if (fetcher === fetch) {
+      const payload = await requestCartAvailability(
+        input.cartItems ?? [
+          {
+            productId: input.productId,
+            variantId: input.variantId ?? null,
+            quantity: input.quantity,
+          },
+        ]
+      );
+      const result = payload.items.find(
+        (item) =>
+          item.productId === input.productId &&
+          (item.variantId ?? null) === (input.variantId ?? null)
+      );
+
+      if (!result) {
+        return { ok: false, message: CART_QUANTITY_CHECK_FAILED_MESSAGE };
+      }
+
+      return result.isAvailable
+        ? { ok: true, message: null }
+        : {
+            ok: false,
+            message: result.message?.trim() || CART_QUANTITY_UNAVAILABLE_MESSAGE,
+          };
+    }
+
     const response = await fetcher("/api/cart/availability", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

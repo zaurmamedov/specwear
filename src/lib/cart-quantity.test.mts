@@ -22,6 +22,7 @@ const CART_ITEM_SOURCE = source("../components/Cart/CartItem.tsx");
 const CART_CLIENT_SOURCE = source("../components/Cart/CartClient.tsx");
 const CART_STORE_SOURCE = source("../stores/cart.store.ts");
 const QUANTITY_HOOK_SOURCE = source("../hooks/use-quantity-input.ts");
+const AVAILABILITY_HOOK_SOURCE = source("../hooks/use-cart-availability.ts");
 const PRODUCT_CARD_SOURCE = source(
   "../components/ProductCard/ProductCardActions.tsx"
 );
@@ -258,7 +259,8 @@ test("all customer quantity inputs use the shared synchronization model", () => 
 });
 
 test("stale cart stock still blocks checkout", () => {
-  assert.match(CART_CLIENT_SOURCE, /fetch\("\/api\/cart\/availability"/);
+  assert.match(CART_CLIENT_SOURCE, /useCartAvailability/);
+  assert.match(AVAILABILITY_HOOK_SOURCE, /requestCartAvailability/);
   assert.match(CART_CLIENT_SOURCE, /hasUnavailableItems/);
   assert.match(CHECKOUT_CLIENT_SOURCE, /!hasUnavailableCartItems/);
 });

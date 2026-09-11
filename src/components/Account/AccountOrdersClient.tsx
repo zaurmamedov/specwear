@@ -50,7 +50,7 @@ function getStatusClassName(status: OrderStatus) {
 }
 
 export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
-  const addItem = useCartStore((state) => state.addItem);
+  const addItems = useCartStore((state) => state.addItems);
   const [feedback, setFeedback] = useState<Record<string, { message: string; error?: boolean }>>(
     {}
   );
@@ -233,7 +233,7 @@ export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
                     });
                     const payload = (await response.json()) as {
                       error?: string;
-                      items?: Array<Parameters<typeof addItem>[0]>;
+                      items?: Parameters<typeof addItems>[0];
                       unavailableItems?: string[];
                     };
 
@@ -241,12 +241,16 @@ export function AccountOrdersClient({ orders }: AccountOrdersClientProps) {
                       throw new Error(payload.error ?? "Не вдалося повторити замовлення.");
                     }
 
-                    const addResults = await Promise.all(
-                      payload.items.map((item) => addItem(item))
-                    );
+                    const addResult = await addItems(payload.items);
+
+                    if (!addResult.ok) {
+                      throw new Error(
+                        addResult.message ?? "Не вдалося повторити замовлення."
+                      );
+                    }
 
                     const unavailableCount = payload.unavailableItems?.length ?? 0;
-                    const rejectedCount = addResults.filter((result) => !result.ok).length;
+                    const rejectedCount = addResult.rejectedCount ?? 0;
                     const message =
                       unavailableCount + rejectedCount > 0
                         ? `Додано доступні позиції. Недоступно: ${unavailableCount + rejectedCount}.`

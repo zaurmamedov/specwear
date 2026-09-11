@@ -160,10 +160,10 @@ test("public product variants exclude inactive and sensitive inventory fields", 
     assert.equal(field in publicVariants[0], false);
   }
 
-  const availabilityRoute = source("../app/api/cart/availability/route.ts");
-  assert.match(availabilityRoute, /const publicValidation = validation\.map/);
+  const availabilityHandler = source("./cart-availability-handler.ts");
+  assert.match(availabilityHandler, /const publicValidation = validation\.map/);
   assert.doesNotMatch(
-    availabilityRoute.match(/const publicValidation = validation\.map[\s\S]*?\}\);/)?.[0] ?? "",
+    availabilityHandler.match(/const publicValidation = validation\.map[\s\S]*?\}\);/)?.[0] ?? "",
     /stockQuantity|productStatus/
   );
 });
