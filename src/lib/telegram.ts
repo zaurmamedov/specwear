@@ -26,7 +26,9 @@ export async function sendOrderTelegramNotification(
       token,
       chatId,
     });
-  } catch (error) {
-    console.error("Telegram notification failed:", error);
+  } catch {
+    console.error("Telegram notification failed:", {
+      reason: "unexpected_error",
+    });
   }
 }

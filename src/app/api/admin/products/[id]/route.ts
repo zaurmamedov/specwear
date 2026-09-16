@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 
 import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 import { updateAdminProduct } from "@/services/admin-products.service";
 import type { AdminProductUpdateInput } from "@/types/admin-product";
 
@@ -38,6 +45,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
 
   try {
     const cookieStore = await cookies();
@@ -51,11 +60,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<AdminProductUpdateInput>;
+    const body = (await readBoundedJsonObject(request, 64 * 1024)) as Partial<AdminProductUpdateInput>;
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
     const status = normalizeText(body.status) as ProductStatus;
+
+    if (
+      !isUuid(id) ||
+      !isUuid(categoryId) ||
+      (normalizeOptionalText(body.brand_id) !== null &&
+        !isUuid(normalizeOptionalText(body.brand_id))) ||
+      !isBoundedString(name, 200) ||
+      !isBoundedString(slug, 200) ||
+      !isBoundedString(body.model ?? "", 200) ||
+      !isBoundedString(body.short_description ?? "", 1_000) ||
+      !isBoundedString(body.description ?? "", 20_000) ||
+      !isBoundedString(body.main_image_url ?? "", 2_048) ||
+      (Array.isArray(body.variants) && body.variants.length > 100) ||
+      (Array.isArray(body.images) && body.images.length > 100)
+    ) {
+      return NextResponse.json({ error: "Некоректні або завеликі дані товару." }, { status: 400 });
+    }
 
     if (Array.isArray(body.variants) && body.variants.length > 0) {
       return NextResponse.json(
@@ -144,14 +170,6 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося оновити товар.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося оновити товар.");
   }
 }

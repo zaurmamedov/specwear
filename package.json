@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:checkout": "node --test --experimental-strip-types src/lib/checkout-validation.test.mts src/lib/checkout-client-validation.test.mts src/lib/customer-session-cookies.test.mts src/lib/checkout-pricing.test.mts src/lib/checkout-idempotency.test.mts src/lib/checkout-inventory.test.mts src/lib/security-regressions.test.mts src/lib/cart-quantity.test.mts",
-    "test:security": "node --test --experimental-strip-types src/lib/security-regressions.test.mts src/lib/auth-redirect.test.mts",
+    "test:security": "node --test --experimental-strip-types src/lib/security-regressions.test.mts src/lib/auth-redirect.test.mts src/lib/security-p3.test.mts",
+    "test:p3": "node --test --experimental-strip-types src/lib/security-p3.test.mts",
     "test:redirect-security": "node --test --experimental-strip-types src/lib/auth-redirect.test.mts",
     "test:security:integration": "node scripts/security-authorization.integration.mjs",
     "test:checkout-validation": "node --test --experimental-strip-types src/lib/checkout-validation.test.mts",
@@ -16,6 +17,7 @@
     "test:cart-quantity": "node --test --experimental-strip-types src/lib/cart-quantity.test.mts",
     "test:public-api": "node --test --experimental-strip-types src/lib/public-api-hardening.test.mts",
     "test:checkout-idempotency": "node --test --experimental-strip-types src/lib/checkout-idempotency.test.mts",
+    "test:idempotency": "npm run test:checkout-idempotency",
     "test:inventory": "node --test --experimental-strip-types src/lib/checkout-inventory.test.mts",
     "test:inventory:integration": "node scripts/checkout-inventory.integration.mjs"
   },
@@ -24,6 +26,7 @@
     "next": "16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "sharp": "0.35.4",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

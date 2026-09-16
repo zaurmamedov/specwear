@@ -7,6 +7,12 @@ import {
   setAdminSessionCookies,
 } from "@/lib/admin-auth";
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
+import {
+  isBoundedString,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 
 const SUPABASE_CAPTCHA_FAILURE_MESSAGE =
   "Не вдалося пройти перевірку безпеки. Оновіть сторінку і спробуйте ще раз.";
@@ -22,18 +28,28 @@ function isSupabaseCaptchaError(message: string | undefined) {
 }
 
 export async function POST(request: Request) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 8 * 1024)) as {
       email?: string;
       password?: string;
       turnstileToken?: string;
     };
 
-    const email = body.email?.trim() ?? "";
-    const password = body.password ?? "";
-    const turnstileToken = body.turnstileToken?.trim() ?? "";
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const turnstileToken =
+      typeof body.turnstileToken === "string" ? body.turnstileToken.trim() : "";
 
-    if (!email || !password) {
+    if (
+      !email ||
+      !password ||
+      !isBoundedString(email, 254) ||
+      !isBoundedString(password, 1_024) ||
+      !isBoundedString(turnstileToken, 2_048)
+    ) {
       return NextResponse.json(
         { error: "Вкажіть email і пароль." },
         { status: 400 }
@@ -56,7 +72,6 @@ export async function POST(request: Request) {
     if (process.env.NODE_ENV !== "production") {
       console.log("Admin login captcha/auth diagnostic", {
         hasTurnstileToken: Boolean(turnstileToken),
-        supabaseAuthErrorMessage: error?.message ?? null,
         supabaseAuthErrorCode: error?.code ?? null,
         supabaseAuthErrorStatus: error?.status ?? null,
       });
@@ -78,7 +93,6 @@ export async function POST(request: Request) {
 
     if (process.env.NODE_ENV !== "production") {
       console.log("Admin login identity check", {
-        userEmail: data.user.email ?? null,
         hasAdminEmail: Boolean(process.env.ADMIN_EMAIL?.trim()),
       });
     }
@@ -96,10 +110,7 @@ export async function POST(request: Request) {
     setAdminSessionCookies(response, data.session);
 
     return response;
-  } catch {
-    return NextResponse.json(
-      { error: "Не вдалося виконати вхід." },
-      { status: 500 }
-    );
+  } catch (error) {
+    return safeRequestErrorResponse(error, "Не вдалося виконати вхід.");
   }
 }

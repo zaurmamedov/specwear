@@ -1,6 +1,8 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createTurnstileVerificationBody } from "./turnstile-request";
+
+export { getTurnstileRemoteIp } from "./turnstile-request";
 
 const TURNSTILE_VERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -18,46 +20,6 @@ export type TurnstileVerificationResult = {
 
 function isDevelopment() {
   return process.env.NODE_ENV !== "production";
-}
-
-function createTurnstileVerificationIdempotencyKey(
-  checkoutIdempotencyKey: string,
-  token: string
-) {
-  const bytes = createHash("sha256")
-    .update(`${checkoutIdempotencyKey}:${token}`)
-    .digest()
-    .subarray(0, 16);
-
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-export function getTurnstileRemoteIp(request: Request) {
-  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
-
-  if (cfConnectingIp) {
-    return cfConnectingIp;
-  }
-
-  const forwardedFor = request.headers.get("x-forwarded-for");
-
-  if (forwardedFor) {
-    const firstForwardedIp = forwardedFor
-      .split(",")
-      .map((part) => part.trim())
-      .find(Boolean);
-
-    if (firstForwardedIp) {
-      return firstForwardedIp;
-    }
-  }
-
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  return realIp || undefined;
 }
 
 export async function verifyTurnstileToken(
@@ -96,24 +58,12 @@ export async function verifyTurnstileToken(
   const timeoutId = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT_MS);
 
   try {
-    const body = new URLSearchParams({
+    const body = createTurnstileVerificationBody({
       secret: secretKey,
-      response: normalizedToken,
+      token: normalizedToken,
+      remoteIp,
+      idempotencyKey,
     });
-
-    if (remoteIp) {
-      body.set("remoteip", remoteIp);
-    }
-
-    if (idempotencyKey) {
-      body.set(
-        "idempotency_key",
-        createTurnstileVerificationIdempotencyKey(
-          idempotencyKey,
-          normalizedToken
-        )
-      );
-    }
 
     const response = await fetch(TURNSTILE_VERIFY_URL, {
       method: "POST",

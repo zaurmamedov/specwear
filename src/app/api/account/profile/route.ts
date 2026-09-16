@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 
 import { getCustomerUserFromCookieStore } from "@/lib/customer-auth";
 import { upsertProfileForUser } from "@/services/account.service";
+import {
+  isBoundedString,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 
 function validatePhone(phone: string | null | undefined) {
   if (!phone?.trim()) {
@@ -13,6 +19,9 @@ function validatePhone(phone: string | null | undefined) {
 }
 
 export async function PATCH(request: Request) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   const cookieStore = await cookies();
   const user = await getCustomerUserFromCookieStore(cookieStore);
 
@@ -21,7 +30,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 8 * 1024)) as {
       firstName?: string;
       lastName?: string;
       phone?: string;
@@ -34,9 +43,31 @@ export async function PATCH(request: Request) {
       deliveryAddress?: string;
     };
 
-    const firstName = body.firstName?.trim() ?? "";
-    const lastName = body.lastName?.trim() ?? "";
-    const phone = body.phone?.trim() ?? "";
+    const normalizeText = (value: unknown) =>
+      typeof value === "string" ? value.trim() : "";
+    const firstName = normalizeText(body.firstName);
+    const lastName = normalizeText(body.lastName);
+    const phone = normalizeText(body.phone);
+
+    const boundedFields: Array<[unknown, number]> = [
+      [firstName, 100],
+      [lastName, 100],
+      [phone, 32],
+      [body.deliveryService ?? "", 40],
+      [body.deliveryMethod ?? "", 40],
+      [body.deliveryCity ?? "", 120],
+      [body.deliveryCityRef ?? "", 128],
+      [body.deliveryWarehouse ?? "", 300],
+      [body.deliveryWarehouseRef ?? "", 128],
+      [body.deliveryAddress ?? "", 500],
+    ];
+
+    if (boundedFields.some(([value, max]) => !isBoundedString(value, max))) {
+      return NextResponse.json(
+        { error: "Дані профілю перевищують допустимий розмір." },
+        { status: 400 }
+      );
+    }
 
     if (!firstName) {
       return NextResponse.json({ error: "Введіть ім'я" }, { status: 400 });
@@ -57,17 +88,17 @@ export async function PATCH(request: Request) {
       first_name: firstName,
       last_name: lastName,
       phone: phone || null,
-      delivery_service: body.deliveryService?.trim() || null,
-      delivery_method: body.deliveryMethod?.trim() || null,
-      delivery_city: body.deliveryCity?.trim() || null,
-      delivery_city_ref: body.deliveryCityRef?.trim() || null,
-      delivery_warehouse: body.deliveryWarehouse?.trim() || null,
-      delivery_warehouse_ref: body.deliveryWarehouseRef?.trim() || null,
-      delivery_address: body.deliveryAddress?.trim() || null,
+      delivery_service: normalizeText(body.deliveryService) || null,
+      delivery_method: normalizeText(body.deliveryMethod) || null,
+      delivery_city: normalizeText(body.deliveryCity) || null,
+      delivery_city_ref: normalizeText(body.deliveryCityRef) || null,
+      delivery_warehouse: normalizeText(body.deliveryWarehouse) || null,
+      delivery_warehouse_ref: normalizeText(body.deliveryWarehouseRef) || null,
+      delivery_address: normalizeText(body.deliveryAddress) || null,
     });
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Не вдалося зберегти дані." }, { status: 500 });
+  } catch (error) {
+    return safeRequestErrorResponse(error, "Не вдалося зберегти дані.");
   }
 }

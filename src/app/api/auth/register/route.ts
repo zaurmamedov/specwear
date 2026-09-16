@@ -7,6 +7,12 @@ import {
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import { upsertProfileForUser } from "@/services/account.service";
+import {
+  isBoundedString,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 
 const SUPABASE_CAPTCHA_FAILURE_MESSAGE =
   "Не вдалося пройти перевірку безпеки. Оновіть сторінку і спробуйте ще раз.";
@@ -79,8 +85,11 @@ function isSupabaseCaptchaError(message: string | undefined) {
 }
 
 export async function POST(request: Request) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 16 * 1024)) as {
       firstName?: string;
       lastName?: string;
       phone?: string;
@@ -89,21 +98,32 @@ export async function POST(request: Request) {
       turnstileToken?: string;
     };
 
-    const firstName = body.firstName?.trim() ?? "";
-    const lastName = body.lastName?.trim() ?? "";
-    const phone = body.phone?.trim() ?? "";
-    const submittedEmail = body.email ?? "";
+    const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+    const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+    const submittedEmail = typeof body.email === "string" ? body.email : "";
     const email = submittedEmail.trim();
     const normalizedEmail = email.toLowerCase();
-    const password = body.password ?? "";
-    const turnstileToken = body.turnstileToken?.trim() ?? "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const turnstileToken =
+      typeof body.turnstileToken === "string" ? body.turnstileToken.trim() : "";
     const isEmailValid = validateEmail(normalizedEmail);
 
-    logRegisterDev("Register request validation", {
-      submittedEmail,
-      normalizedEmail,
-      emailRegexValid: isEmailValid,
-    });
+    logRegisterDev("Register request validation", { emailRegexValid: isEmailValid });
+
+    if (
+      !isBoundedString(firstName, 100) ||
+      !isBoundedString(lastName, 100) ||
+      !isBoundedString(phone, 32) ||
+      !isBoundedString(email, 254) ||
+      !isBoundedString(password, 1_024) ||
+      !isBoundedString(turnstileToken, 2_048)
+    ) {
+      return NextResponse.json(
+        { error: "Реєстраційні дані перевищують допустимий розмір." },
+        { status: 400 }
+      );
+    }
 
     if (!turnstileToken) {
       return NextResponse.json({ error: TURNSTILE_FAILURE_MESSAGE }, { status: 400 });
@@ -153,10 +173,7 @@ export async function POST(request: Request) {
       signUpSuccess: !error && Boolean(data.user),
       hasUser: Boolean(data.user),
       hasSession: Boolean(data.session),
-      submittedEmail,
-      normalizedEmail,
       emailRegexValid: isEmailValid,
-      signUpErrorMessage: error?.message ?? null,
       signUpErrorCode: "code" in (error ?? {}) ? (error as { code?: string }).code ?? null : null,
       signUpErrorStatus:
         "status" in (error ?? {}) ? (error as { status?: number }).status ?? null : null,
@@ -192,8 +209,8 @@ export async function POST(request: Request) {
         );
       } catch (profileError) {
         logRegisterDev("Register profile upsert failed", {
-          profileCreateErrorMessage:
-            profileError instanceof Error ? profileError.message : "Unknown profile error",
+          profileCreateErrorType:
+            profileError instanceof Error ? profileError.name : "unknown",
           profileCreateErrorCode: null,
           profileCreateErrorStatus: null,
           hasSession: true,
@@ -210,7 +227,6 @@ export async function POST(request: Request) {
 
           if (fallbackError) {
             logRegisterDev("Register profile service-role fallback failed", {
-              profileCreateErrorMessage: fallbackError.message,
               profileCreateErrorCode:
                 "code" in fallbackError
                   ? (fallbackError as { code?: string }).code ?? null
@@ -224,8 +240,8 @@ export async function POST(request: Request) {
           }
         } catch (fallbackError) {
           logRegisterDev("Register profile fallback threw", {
-            profileCreateErrorMessage:
-              fallbackError instanceof Error ? fallbackError.message : "Unknown fallback error",
+            profileCreateErrorType:
+              fallbackError instanceof Error ? fallbackError.name : "unknown",
             profileCreateErrorCode: null,
             profileCreateErrorStatus: null,
             hasSession: true,
@@ -244,7 +260,6 @@ export async function POST(request: Request) {
 
         if (profileError) {
           logRegisterDev("Register profile create skipped on email confirmation", {
-            profileCreateErrorMessage: profileError.message,
             profileCreateErrorCode:
               "code" in profileError
                 ? (profileError as { code?: string }).code ?? null
@@ -258,8 +273,8 @@ export async function POST(request: Request) {
         }
       } catch (profileError) {
         logRegisterDev("Register profile create threw on email confirmation", {
-          profileCreateErrorMessage:
-            profileError instanceof Error ? profileError.message : "Unknown profile error",
+          profileCreateErrorType:
+            profileError instanceof Error ? profileError.name : "unknown",
           profileCreateErrorCode: null,
           profileCreateErrorStatus: null,
           hasSession: false,
@@ -281,8 +296,8 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     logRegisterDev("Register route threw", {
-      routeErrorMessage: error instanceof Error ? error.message : "Unknown route error",
+      routeErrorType: error instanceof Error ? error.name : "unknown",
     });
-    return NextResponse.json({ error: "Не вдалося створити акаунт." }, { status: 500 });
+    return safeRequestErrorResponse(error, "Не вдалося створити акаунт.");
   }
 }

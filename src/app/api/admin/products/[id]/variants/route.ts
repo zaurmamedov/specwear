@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
+import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 import { createAdminProductVariant } from "@/services/admin-products.service";
 import type { AdminProductVariantInput } from "@/types/admin-product";
 
@@ -64,6 +71,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: productId } = await params;
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
 
   try {
     const cookieStore = await cookies();
@@ -77,10 +86,20 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<AdminProductVariantInput> & {
+    const body = (await readBoundedJsonObject(request, 16 * 1024)) as Partial<AdminProductVariantInput> & {
       productSlug?: string | null;
     };
     const { payload, retailPrice, stockQuantity } = buildVariantPayload(body);
+
+    if (
+      !isUuid(productId) ||
+      !isBoundedString(body.sku ?? "", 200) ||
+      !isBoundedString(body.size ?? "", 100) ||
+      !isBoundedString(body.color ?? "", 100) ||
+      !isBoundedString(body.productSlug ?? "", 200)
+    ) {
+      return NextResponse.json({ error: "Некоректні дані варіанта." }, { status: 400 });
+    }
 
     if (!Number.isFinite(retailPrice) || retailPrice < 0) {
       return NextResponse.json(
@@ -112,14 +131,6 @@ export async function POST(
 
     return NextResponse.json({ success: true, variantId });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося створити варіант.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося створити варіант.");
   }
 }

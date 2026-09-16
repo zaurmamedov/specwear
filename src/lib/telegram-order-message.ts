@@ -24,7 +24,7 @@ export type TelegramOrderNotificationInput = {
 
 export const TELEGRAM_MESSAGE_SAFE_LENGTH = 3_900;
 export const TELEGRAM_ORDER_MAX_PARTS = 4;
-export const TELEGRAM_ERROR_LOG_MAX_LENGTH = 1_000;
+export const TELEGRAM_OUTBOUND_TIMEOUT_MS = 5_000;
 const TELEGRAM_ITEM_NAME_MAX_LENGTH = 160;
 
 export function escapeTelegramHtml(value: string) {
@@ -209,13 +209,18 @@ export async function deliverOrderTelegramMessages(
   dependencies: {
     fetcher?: typeof fetch;
     logError?: (message: string, detail: unknown) => void;
+    timeoutMs?: number;
   } = {}
 ) {
   const fetcher = dependencies.fetcher ?? fetch;
   const logError = dependencies.logError ?? console.error;
+  const timeoutMs = dependencies.timeoutMs ?? TELEGRAM_OUTBOUND_TIMEOUT_MS;
 
-  try {
-    for (const message of messages) {
+  for (const message of messages) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
       const response = await fetcher(
         `https://api.telegram.org/bot${credentials.token}/sendMessage`,
         {
@@ -229,18 +234,25 @@ export async function deliverOrderTelegramMessages(
             parse_mode: "HTML",
             disable_web_page_preview: true,
           }),
+          signal: controller.signal,
         }
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        logError(
-          "Telegram notification failed:",
-          errorText.slice(0, TELEGRAM_ERROR_LOG_MAX_LENGTH)
-        );
+        logError("Telegram notification failed:", { status: response.status });
+        return;
       }
+    } catch (error) {
+      logError("Telegram notification failed:", {
+        reason:
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+            ? "timeout"
+            : "network_error",
+      });
+      return;
+    } finally {
+      clearTimeout(timeoutId);
     }
-  } catch (error) {
-    logError("Telegram notification failed:", error);
   }
 }

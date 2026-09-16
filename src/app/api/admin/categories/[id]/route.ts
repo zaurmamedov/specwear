@@ -2,7 +2,17 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
-import { updateAdminCategory } from "@/services/admin-categories.service";
+import {
+  AdminCategoryValidationError,
+  updateAdminCategory,
+} from "@/services/admin-categories.service";
+import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -18,6 +28,9 @@ function normalizeOptionalText(value: unknown) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   try {
     const cookieStore = await cookies();
     const user = await getAdminUserFromCookieStore(cookieStore);
@@ -31,28 +44,40 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await readBoundedJsonObject(request, 8 * 1024);
+    const name = normalizeText(body.name);
+    const slug = normalizeText(body.slug);
+    const parentId = normalizeOptionalText(body.parent_id);
+    const iconName = normalizeOptionalText(body.icon_name);
+    const imageUrl = normalizeOptionalText(body.image_url);
+
+    if (
+      !isUuid(id) ||
+      !isBoundedString(name, 200) ||
+      !isBoundedString(slug, 200) ||
+      (parentId !== null && !isUuid(parentId)) ||
+      (iconName !== null && !isBoundedString(iconName, 100)) ||
+      (imageUrl !== null && !isBoundedString(imageUrl, 2_048))
+    ) {
+      return NextResponse.json({ error: "Некоректні дані категорії." }, { status: 400 });
+    }
 
     await updateAdminCategory(id, {
-      name: normalizeText(body.name),
-      slug: normalizeText(body.slug),
-      parent_id: normalizeOptionalText(body.parent_id),
+      name,
+      slug,
+      parent_id: parentId,
       sort_order: Number.parseInt(normalizeText(body.sort_order), 10) || 0,
-      icon_name: normalizeOptionalText(body.icon_name),
-      image_url: normalizeOptionalText(body.image_url),
+      icon_name: iconName,
+      image_url: imageUrl,
       is_active: body.is_active !== false,
     });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося оновити категорію.",
-      },
-      { status: 400 }
-    );
+    if (error instanceof AdminCategoryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return safeRequestErrorResponse(error, "Не вдалося оновити категорію.");
   }
 }

@@ -26,7 +26,7 @@ import {
   buildOrderTelegramMessages,
   deliverOrderTelegramMessages,
   getTelegramParsedTextLength,
-  TELEGRAM_ERROR_LOG_MAX_LENGTH,
+  TELEGRAM_OUTBOUND_TIMEOUT_MS,
   TELEGRAM_MESSAGE_SAFE_LENGTH,
   TELEGRAM_ORDER_MAX_PARTS,
   type TelegramOrderNotificationInput,
@@ -664,7 +664,7 @@ test("pickup Telegram message has one clean delivery label and no fake city bloc
   assert.doesNotMatch(message, /Відділення: —/);
 });
 
-test("Telegram provider failures remain non-critical and logs are bounded", async () => {
+test("Telegram provider failures remain non-critical and logs are sanitized", async () => {
   const details: unknown[] = [];
   await deliverOrderTelegramMessages(
     buildOrderTelegramMessages(createTelegramInput()),
@@ -675,8 +675,8 @@ test("Telegram provider failures remain non-critical and logs are bounded", asyn
     }
   );
 
-  assert.equal(typeof details[0], "string");
-  assert.equal((details[0] as string).length, TELEGRAM_ERROR_LOG_MAX_LENGTH);
+  assert.deepEqual(details[0], { status: 500 });
+  assert.equal(TELEGRAM_OUTBOUND_TIMEOUT_MS, 5_000);
 
   await assert.doesNotReject(() =>
     deliverOrderTelegramMessages(

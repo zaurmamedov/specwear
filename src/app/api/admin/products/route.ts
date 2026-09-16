@@ -6,6 +6,13 @@ import { PRODUCT_STATUSES, type ProductStatus } from "@/lib/product-status";
 import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
 import { DEFAULT_SLUG_PATTERN, slugifyLatin } from "@/lib/slugs";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 import { createAdminProduct } from "@/services/admin-products.service";
 import type { AdminProductCreateInput } from "@/types/admin-product";
 
@@ -34,6 +41,9 @@ function normalizeInteger(value: unknown, fallback = 0) {
 }
 
 export async function POST(request: Request) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   try {
     const cookieStore = await cookies();
     const user = await getAdminUserFromCookieStore(cookieStore);
@@ -46,7 +56,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<AdminProductCreateInput>;
+    const body = (await readBoundedJsonObject(request, 64 * 1024)) as Partial<AdminProductCreateInput>;
     const name = normalizeText(body.name);
     const slug = normalizeText(body.slug);
     const categoryId = normalizeText(body.category_id);
@@ -57,6 +67,31 @@ export async function POST(request: Request) {
     const status = normalizeText(body.status) as ProductStatus;
     const retailPrice = normalizeInteger(body.variant?.retail_price, Number.NaN);
     const stockQuantity = normalizeInteger(body.variant?.stock_quantity, Number.NaN);
+
+    const boundedFields: Array<[unknown, number]> = [
+      [name, 200],
+      [slug, 200],
+      [body.model ?? "", 200],
+      [body.short_description ?? "", 1_000],
+      [body.description ?? "", 20_000],
+      [newBrandName, 200],
+      [body.new_brand?.slug ?? "", 200],
+      [body.new_brand?.logo_url ?? "", 2_048],
+      [body.main_image_url ?? "", 2_048],
+      [body.variant?.sku ?? "", 200],
+      [body.variant?.size ?? "", 100],
+      [body.variant?.color ?? "", 100],
+      [body.image?.image_url ?? "", 2_048],
+      [body.image?.alt ?? "", 300],
+    ];
+
+    if (
+      boundedFields.some(([value, max]) => !isBoundedString(value, max)) ||
+      !isUuid(categoryId) ||
+      (brandId !== null && !isUuid(brandId))
+    ) {
+      return NextResponse.json({ error: "Некоректні або завеликі дані товару." }, { status: 400 });
+    }
 
     if (!name) {
       return NextResponse.json(
@@ -86,7 +121,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(retailPrice) || retailPrice <= 0) {
+    if (
+      !Number.isFinite(retailPrice) ||
+      retailPrice <= 0 ||
+      retailPrice > POSTGRES_INTEGER_MAX
+    ) {
       return NextResponse.json(
         { error: "Роздрібна ціна повинна бути більшою за нуль." },
         { status: 400 }
@@ -181,14 +220,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, productId });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося створити товар.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося створити товар.");
   }
 }

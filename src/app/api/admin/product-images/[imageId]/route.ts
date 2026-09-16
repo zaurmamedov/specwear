@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
+import {
   deleteAdminProductImage,
   moveAdminProductImage,
   setAdminProductPrimaryImage,
@@ -32,6 +39,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ imageId: string }> }
 ) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   const unauthorized = await authorizeAdmin();
   if (unauthorized) {
     return unauthorized;
@@ -40,7 +50,7 @@ export async function PATCH(
   const { imageId } = await params;
 
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 8 * 1024)) as {
       action?: "make_primary" | "move_up" | "move_down";
       productId?: string;
       productSlug?: string | null;
@@ -49,7 +59,11 @@ export async function PATCH(
     const productId = normalizeText(body.productId);
     const productSlug = normalizeText(body.productSlug) || null;
 
-    if (!productId) {
+    if (
+      !isUuid(imageId) ||
+      !isUuid(productId) ||
+      (productSlug !== null && !isBoundedString(productSlug, 200))
+    ) {
       return NextResponse.json(
         { error: "Не вдалося визначити товар для зображення." },
         { status: 400 }
@@ -85,15 +99,7 @@ export async function PATCH(
       mainImageUrl: imageState.mainImageUrl,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося оновити зображення.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося оновити зображення.");
   }
 }
 
@@ -101,6 +107,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ imageId: string }> }
 ) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   const unauthorized = await authorizeAdmin();
   if (unauthorized) {
     return unauthorized;
@@ -109,7 +118,7 @@ export async function DELETE(
   const { imageId } = await params;
 
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 8 * 1024)) as {
       productId?: string;
       productSlug?: string | null;
     };
@@ -117,7 +126,11 @@ export async function DELETE(
     const productId = normalizeText(body.productId);
     const productSlug = normalizeText(body.productSlug) || null;
 
-    if (!productId) {
+    if (
+      !isUuid(imageId) ||
+      !isUuid(productId) ||
+      (productSlug !== null && !isBoundedString(productSlug, 200))
+    ) {
       return NextResponse.json(
         { error: "Не вдалося визначити товар для зображення." },
         { status: 400 }
@@ -139,14 +152,6 @@ export async function DELETE(
       mainImageUrl: imageState.mainImageUrl,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося видалити зображення.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося видалити зображення.");
   }
 }

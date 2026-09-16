@@ -7,6 +7,12 @@ import {
   updateOrderStatus,
 } from "@/services/orders.service";
 import type { OrderStatus } from "@/types/order";
+import {
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 
 const allowedStatuses: OrderStatus[] = [
   "new",
@@ -21,6 +27,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
 
   try {
     const cookieStore = await cookies();
@@ -34,7 +42,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { status?: string };
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "Некоректний ідентифікатор замовлення." }, { status: 400 });
+    }
+
+    const body = (await readBoundedJsonObject(request, 2 * 1024)) as { status?: string };
     const status = body.status as OrderStatus | undefined;
 
     if (!status || !allowedStatuses.includes(status)) {
@@ -55,14 +67,6 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося оновити статус замовлення.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося оновити статус замовлення.");
   }
 }

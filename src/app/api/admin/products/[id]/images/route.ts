@@ -3,18 +3,24 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
+import {
+  normalizeProductImage,
+  PRODUCT_IMAGE_MAX_FILES,
+  PRODUCT_IMAGE_MAX_REQUEST_BYTES,
+  ProductImageUploadError,
+} from "@/lib/security/product-image-upload";
+import {
+  isBoundedString,
+  isUuid,
+  readBoundedFormData,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
 import { createServerSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   createAdminProductImage,
   PRODUCT_IMAGES_BUCKET,
 } from "@/services/admin-products.service";
-
-const allowedImageTypes = new Set([
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-]);
 
 function normalizeText(value: FormDataEntryValue | null) {
   if (typeof value !== "string") {
@@ -29,6 +35,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: productId } = await params;
+  const invalidOrigin = validateSameOrigin(request);
+
+  if (invalidOrigin) {
+    return invalidOrigin;
+  }
 
   try {
     const cookieStore = await cookies();
@@ -42,36 +53,54 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const formData = await request.formData();
+    if (!isUuid(productId)) {
+      return NextResponse.json({ error: "Некоректний ідентифікатор товару." }, { status: 400 });
+    }
+
+    const formData = await readBoundedFormData(
+      request,
+      PRODUCT_IMAGE_MAX_REQUEST_BYTES
+    );
+    const files = Array.from(formData.values()).filter(
+      (value): value is File => value instanceof File
+    );
     const file = formData.get("file");
     const productSlug = normalizeText(formData.get("productSlug")) || null;
     const alt = normalizeText(formData.get("alt")) || null;
 
-    if (!(file instanceof File)) {
+    if (
+      !(file instanceof File) ||
+      files.length !== PRODUCT_IMAGE_MAX_FILES
+    ) {
       return NextResponse.json({ error: "Файл не знайдено." }, { status: 400 });
     }
 
-    if (!allowedImageTypes.has(file.type)) {
+    if (
+      (productSlug !== null && !isBoundedString(productSlug, 200)) ||
+      (alt !== null && !isBoundedString(alt, 300))
+    ) {
       return NextResponse.json(
-        { error: "Підтримуються лише JPG, JPEG, PNG та WEBP." },
+        { error: "Текстові дані зображення перевищують допустимий розмір." },
         { status: 400 }
       );
     }
 
-    const timestamp = Date.now();
-    const storagePath = `products/${productId}/${timestamp}-${crypto.randomUUID()}.webp`;
+    const webp = await normalizeProductImage(file);
+    const requestId = crypto.randomUUID();
+    const storagePath = `products/${productId}/${crypto.randomUUID()}.webp`;
     const supabase = createServerSupabaseAdminClient();
-    const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage
       .from(PRODUCT_IMAGES_BUCKET)
-      .upload(storagePath, buffer, {
+      .upload(storagePath, webp, {
         contentType: "image/webp",
+        cacheControl: "31536000",
         upsert: false,
       });
 
     if (uploadError) {
-      throw new Error(`Failed to upload product image: ${uploadError.message}`);
+      console.error("Product image storage upload failed", { requestId });
+      throw new Error("product-image-storage-upload-failed");
     }
 
     const { data: publicUrlData } = supabase.storage
@@ -86,7 +115,14 @@ export async function POST(
         alt,
       });
     } catch (error) {
-      await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([storagePath]);
+      const { error: cleanupError } = await supabase.storage
+        .from(PRODUCT_IMAGES_BUCKET)
+        .remove([storagePath]);
+
+      if (cleanupError) {
+        console.error("Product image cleanup failed", { requestId });
+      }
+
       throw error;
     }
 
@@ -103,14 +139,10 @@ export async function POST(
       mainImageUrl: imageState.mainImageUrl,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося завантажити зображення.",
-      },
-      { status: 500 }
-    );
+    if (error instanceof ProductImageUploadError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    return safeRequestErrorResponse(error, "Не вдалося завантажити зображення.");
   }
 }

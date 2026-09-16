@@ -19,6 +19,7 @@ import {
   verifyTurnstileToken,
 } from "@/lib/security/turnstile";
 import { TURNSTILE_FAILURE_MESSAGE } from "@/lib/security/turnstile.shared";
+import { validateSameOrigin } from "@/lib/security/request";
 import { sendOrderTelegramNotification } from "@/lib/telegram";
 import {
   CheckoutValidationError,
@@ -50,13 +51,18 @@ class CheckoutTurnstileError extends Error {
 }
 
 export async function POST(request: Request) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   let shouldClearInvalidCustomerSession = false;
+  const requestId = crypto.randomUUID();
   const checkoutJson = (body: unknown, init?: ResponseInit) => {
     const response = NextResponse.json(body, init);
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("X-Request-Id", requestId);
 
     if (shouldClearInvalidCustomerSession) {
       clearCustomerSessionCookies(response);
-      response.headers.set("Cache-Control", "no-store");
     }
 
     return response;
@@ -93,8 +99,8 @@ export async function POST(request: Request) {
 
     try {
       verifiedCustomerUser = await getCustomerUserFromCookieStore(cookieStore);
-    } catch (authError) {
-      console.error("Customer session verification failed during checkout:", authError);
+    } catch {
+      console.error("Customer session verification failed during checkout", { requestId });
     }
 
     const hasAttemptedCustomerSession = hasCustomerSessionCookie(cookieStore);
@@ -155,9 +161,7 @@ export async function POST(request: Request) {
         );
 
         if (!turnstileVerification.success) {
-          console.error("Turnstile verification failed on checkout:", {
-            error: turnstileVerification.error,
-          });
+          console.error("Turnstile verification failed on checkout", { requestId });
           throw new CheckoutTurnstileError();
         }
 
@@ -206,11 +210,10 @@ export async function POST(request: Request) {
               delivery_address:
                 deliveryService === "pickup" ? null : deliveryAddress,
             });
-          } catch (profileError) {
-            console.error(
-              "Failed to update customer profile after checkout:",
-              profileError
-            );
+          } catch {
+            console.error("Failed to update customer profile after checkout", {
+              requestId,
+            });
           }
         }
 
@@ -332,7 +335,10 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("Checkout order creation failed:", error);
+    console.error("Checkout order creation failed", {
+      requestId,
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
 
     return checkoutJson(
       {

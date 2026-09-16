@@ -5,6 +5,13 @@ import { NextResponse } from "next/server";
 import { getAdminUserFromCookieStore, isAdminEmail } from "@/lib/admin-auth";
 import { POSTGRES_INTEGER_MAX } from "@/lib/checkout-pricing";
 import {
+  isBoundedString,
+  isUuid,
+  readBoundedJsonObject,
+  safeRequestErrorResponse,
+  validateSameOrigin,
+} from "@/lib/security/request";
+import {
   AdminVariantStockConflictError,
   deleteAdminProductVariant,
   updateAdminProductVariant,
@@ -82,6 +89,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ variantId: string }> }
 ) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   const unauthorized = await authorizeAdmin();
 
   if (unauthorized) {
@@ -91,7 +101,7 @@ export async function PATCH(
   const { variantId } = await params;
 
   try {
-    const body = (await request.json()) as Partial<AdminProductVariantInput> & {
+    const body = (await readBoundedJsonObject(request, 16 * 1024)) as Partial<AdminProductVariantInput> & {
       productId?: string;
       productSlug?: string | null;
       expected_stock_quantity?: number;
@@ -100,6 +110,18 @@ export async function PATCH(
     const productId = normalizeText(body.productId);
     const expectedStockQuantity = normalizeInteger(body.expected_stock_quantity);
     const expectedUpdatedAt = normalizeText(body.expected_updated_at);
+
+    if (
+      !isUuid(variantId) ||
+      !isUuid(productId) ||
+      !isBoundedString(body.sku ?? "", 200) ||
+      !isBoundedString(body.size ?? "", 100) ||
+      !isBoundedString(body.color ?? "", 100) ||
+      !isBoundedString(body.productSlug ?? "", 200) ||
+      !isBoundedString(expectedUpdatedAt, 64)
+    ) {
+      return NextResponse.json({ error: "Некоректні дані варіанта." }, { status: 400 });
+    }
 
     if (!productId) {
       return NextResponse.json(
@@ -171,15 +193,7 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося оновити варіант.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося оновити варіант.");
   }
 }
 
@@ -187,6 +201,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ variantId: string }> }
 ) {
+  const invalidOrigin = validateSameOrigin(request);
+  if (invalidOrigin) return invalidOrigin;
+
   const unauthorized = await authorizeAdmin();
 
   if (unauthorized) {
@@ -196,11 +213,19 @@ export async function DELETE(
   const { variantId } = await params;
 
   try {
-    const body = (await request.json()) as {
+    const body = (await readBoundedJsonObject(request, 8 * 1024)) as {
       productId?: string;
       productSlug?: string | null;
     };
     const productId = normalizeText(body.productId);
+
+    if (
+      !isUuid(variantId) ||
+      !isUuid(productId) ||
+      !isBoundedString(body.productSlug ?? "", 200)
+    ) {
+      return NextResponse.json({ error: "Некоректні дані варіанта." }, { status: 400 });
+    }
 
     if (!productId) {
       return NextResponse.json(
@@ -221,14 +246,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Не вдалося видалити варіант.",
-      },
-      { status: 500 }
-    );
+    return safeRequestErrorResponse(error, "Не вдалося видалити варіант.");
   }
 }

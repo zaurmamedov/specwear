@@ -23,6 +23,13 @@ export type AdminCategoryInput = {
   is_active: boolean;
 };
 
+export class AdminCategoryValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminCategoryValidationError";
+  }
+}
+
 function sortCategories(left: Category, right: Category) {
   const leftSort = left.sort_order ?? left.sortOrder ?? 0;
   const rightSort = right.sort_order ?? right.sortOrder ?? 0;
@@ -107,36 +114,36 @@ async function validateCategoryInput(
   categoryId?: string
 ) {
   if (!input.name.trim()) {
-    throw new Error("Вкажіть назву категорії.");
+    throw new AdminCategoryValidationError("Вкажіть назву категорії.");
   }
 
   if (!input.slug.trim()) {
-    throw new Error("Вкажіть slug категорії.");
+    throw new AdminCategoryValidationError("Вкажіть slug категорії.");
   }
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug.trim())) {
-    throw new Error("Slug повинен містити лише латиницю, цифри та дефіси.");
+    throw new AdminCategoryValidationError("Slug повинен містити лише латиницю, цифри та дефіси.");
   }
 
   if (input.sort_order < 0 || !Number.isFinite(input.sort_order)) {
-    throw new Error("Вкажіть коректний порядок сортування.");
+    throw new AdminCategoryValidationError("Вкажіть коректний порядок сортування.");
   }
 
   const categories = await fetchAllCategories();
 
   if (input.parent_id) {
     if (!categories.some((category) => category.id === input.parent_id)) {
-      throw new Error("Батьківську категорію не знайдено.");
+      throw new AdminCategoryValidationError("Батьківську категорію не знайдено.");
     }
 
     if (categoryId) {
       if (input.parent_id === categoryId) {
-        throw new Error("Категорія не може бути батьківською для себе.");
+        throw new AdminCategoryValidationError("Категорія не може бути батьківською для себе.");
       }
 
       const descendantIds = new Set(getCategoryDescendantIds(categories, categoryId));
       if (descendantIds.has(input.parent_id)) {
-        throw new Error("Не можна перемістити категорію всередину власного нащадка.");
+        throw new AdminCategoryValidationError("Не можна перемістити категорію всередину власного нащадка.");
       }
     }
   }
